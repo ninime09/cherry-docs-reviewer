@@ -40,11 +40,13 @@ export async function GET() {
     return Response.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
+  // Team-wide visibility: every authenticated user sees every session.
+  // updatedAt is touched when annotations change, so the list ordered by
+  // updatedAt surfaces sessions with recent activity first.
   const sessions = await prisma.reviewSession.findMany({
-    where: { createdById: session.user.id },
-    orderBy: { createdAt: 'desc' },
+    orderBy: { updatedAt: 'desc' },
     include: {
-      createdBy: { select: { name: true, image: true } },
+      createdBy: { select: { id: true, name: true, image: true } },
       _count: { select: { annotations: true } },
     },
   })
@@ -61,6 +63,7 @@ export async function GET() {
       title: s.title,
       status: s.status,
       createdAt: s.createdAt.toISOString(),
+      updatedAt: s.updatedAt.toISOString(),
       createdBy: s.createdBy,
       annotationCount: s._count.annotations,
     }))

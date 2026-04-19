@@ -80,28 +80,34 @@ export async function POST(req: NextRequest) {
     return Response.json({ error: 'Missing required fields' }, { status: 400 })
   }
 
-  const annotation = await prisma.annotation.create({
-    data: {
-      sessionId,
-      type,
-      filePath,
-      locale: locale || null,
-      selectedText: selectedText || null,
-      globalOffset: globalOffset ?? null,
-      contextBefore: contextBefore || null,
-      contextAfter: contextAfter || null,
-      sourceLine: sourceLine ?? null,
-      areaX: areaX ?? null,
-      areaY: areaY ?? null,
-      areaWidth: areaWidth ?? null,
-      areaHeight: areaHeight ?? null,
-      comment,
-      reviewerId: session.user.id,
-    },
-    include: {
-      reviewer: { select: { id: true, name: true, image: true } },
-    },
-  })
+  const [annotation] = await prisma.$transaction([
+    prisma.annotation.create({
+      data: {
+        sessionId,
+        type,
+        filePath,
+        locale: locale || null,
+        selectedText: selectedText || null,
+        globalOffset: globalOffset ?? null,
+        contextBefore: contextBefore || null,
+        contextAfter: contextAfter || null,
+        sourceLine: sourceLine ?? null,
+        areaX: areaX ?? null,
+        areaY: areaY ?? null,
+        areaWidth: areaWidth ?? null,
+        areaHeight: areaHeight ?? null,
+        comment,
+        reviewerId: session.user.id,
+      },
+      include: {
+        reviewer: { select: { id: true, name: true, image: true } },
+      },
+    }),
+    prisma.reviewSession.update({
+      where: { id: sessionId },
+      data: { updatedAt: new Date() },
+    }),
+  ])
 
   return Response.json(annotation, { status: 201 })
 }
@@ -118,6 +124,20 @@ export async function PATCH(req: NextRequest) {
     return Response.json({ error: 'Missing annotation id' }, { status: 400 })
   }
 
+  // Look up the annotation's sessionId so we can touch updatedAt
+  const existing = await prisma.annotation.findUnique({
+    where: { id },
+    select: { sessionId: true },
+  })
+
+  async function touchSession() {
+    if (!existing) return
+    await prisma.reviewSession.update({
+      where: { id: existing.sessionId },
+      data: { updatedAt: new Date() },
+    })
+  }
+
   // Add a reply
   if (reply) {
     const newReply = await prisma.reply.create({
@@ -128,6 +148,7 @@ export async function PATCH(req: NextRequest) {
       },
       include: { author: { select: { id: true, name: true, image: true } } },
     })
+    await touchSession()
     return Response.json(newReply)
   }
 
@@ -140,6 +161,7 @@ export async function PATCH(req: NextRequest) {
     where: { id },
     data: updateData,
   })
+  await touchSession()
 
   return Response.json(updated)
 }
@@ -151,6 +173,16 @@ export async function DELETE(req: NextRequest) {
   }
 
   const { id } = await req.json()
+  const existing = await prisma.annotation.findUnique({
+    where: { id },
+    select: { sessionId: true },
+  })
   await prisma.annotation.delete({ where: { id } })
+  if (existing) {
+    await prisma.reviewSession.update({
+      where: { id: existing.sessionId },
+      data: { updatedAt: new Date() },
+    })
+  }
   return Response.json({ ok: true })
 }

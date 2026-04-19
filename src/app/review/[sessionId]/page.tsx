@@ -92,12 +92,14 @@ export default function ReviewPage() {
   }, [])
   const pollRef = useRef<ReturnType<typeof setInterval>>(null)
 
-  // Load session info
+  // Load session info (works for any session, not just ones you created)
   useEffect(() => {
-    fetch(`/api/sessions`)
-      .then((r) => r.json())
-      .then((sessions: SessionInfo[]) => {
-        const s = sessions.find((s: SessionInfo) => s.id === sessionId)
+    fetch(`/api/sessions/${sessionId}`)
+      .then(async (r) => {
+        if (!r.ok) return null
+        return r.json()
+      })
+      .then((s: SessionInfo | null) => {
         if (s) setSessionInfo(s)
       })
       .finally(() => setLoading(false))
