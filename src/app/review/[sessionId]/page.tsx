@@ -843,12 +843,21 @@ export default function ReviewPage() {
           )}
         </div>
 
-        {/* Annotation panel */}
+        {/* Annotation panel — receives ALL annotations; the panel itself has
+            a "This file / All files" toggle. When an annotation in another
+            file is clicked, we switch to that file automatically. */}
         {rightSidebarOpen && (
           <AnnotationPanel
-            annotations={fileAnnotations}
+            annotations={annotations}
+            currentFilePath={selectedFile}
             activeId={activeAnnotationId}
-            onSelect={setActiveAnnotationId}
+            onSelect={(id) => {
+              setActiveAnnotationId(id)
+              const a = annotations.find((x) => x.id === id)
+              if (a && a.filePath !== selectedFile) {
+                loadFile(a.filePath)
+              }
+            }}
             onStatusChange={updateStatus}
             onReply={replyToAnnotation}
             onDelete={deleteAnnotation}

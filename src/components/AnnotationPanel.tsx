@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   Check,
   CheckCheck,
@@ -11,12 +11,17 @@ import {
   Sparkles,
   ChevronDown,
   ChevronRight,
+  FileText,
 } from 'lucide-react'
 import type { AnnotationData } from '@/types'
 
 interface AnnotationPanelProps {
   annotations: AnnotationData[]
+  /** Path of the currently open file — used as default scope when set */
+  currentFilePath?: string | null
   activeId?: string
+  /** Called when the user clicks an annotation. If the annotation lives in a
+   *  different file than currentFilePath, the handler should switch to it. */
   onSelect: (id: string) => void
   onStatusChange: (id: string, status: string) => void
   onReply: (id: string, comment: string) => void
@@ -33,6 +38,7 @@ const STATUS_CONFIG = {
 
 export default function AnnotationPanel({
   annotations,
+  currentFilePath,
   activeId,
   onSelect,
   onStatusChange,
@@ -44,10 +50,31 @@ export default function AnnotationPanel({
   const [replyText, setReplyText] = useState('')
   const [filter, setFilter] = useState<string>('all')
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set())
+  // Scope: whether to show annotations on the current file only or across all
+  // files in this session. Default to 'all' when no file is open.
+  const [scope, setScope] = useState<'current' | 'all'>(
+    currentFilePath ? 'current' : 'all'
+  )
 
-  const filtered = filter === 'all'
-    ? annotations
-    : annotations.filter((a) => a.status === filter)
+  // When the user opens a file for the first time, default to 'current' scope.
+  // We track the previous value so we don't override an explicit user choice.
+  const prevFileRef = useRef<string | null | undefined>(currentFilePath)
+  useEffect(() => {
+    if (currentFilePath && !prevFileRef.current) {
+      setScope('current')
+    }
+    prevFileRef.current = currentFilePath
+  }, [currentFilePath])
+
+  // Scope filter: only annotations on the current file, or all
+  const inScope =
+    scope === 'current' && currentFilePath
+      ? annotations.filter((a) => a.filePath === currentFilePath)
+      : annotations
+
+  // Status filter on top of scope
+  const filtered =
+    filter === 'all' ? inScope : inScope.filter((a) => a.status === filter)
 
   // Group by status
   const groups = {
@@ -58,10 +85,10 @@ export default function AnnotationPanel({
   }
 
   const counts = {
-    all: annotations.length,
-    open: annotations.filter((a) => a.status === 'open').length,
-    done: annotations.filter((a) => a.status === 'done').length,
-    resolved: annotations.filter((a) => a.status === 'resolved').length,
+    all: inScope.length,
+    open: inScope.filter((a) => a.status === 'open').length,
+    done: inScope.filter((a) => a.status === 'done').length,
+    resolved: inScope.filter((a) => a.status === 'resolved').length,
   }
 
   function handleReply(annotationId: string) {
@@ -82,7 +109,36 @@ export default function AnnotationPanel({
     <div className="w-80 border-l border-border flex flex-col bg-background overflow-hidden">
       {/* Header */}
       <div className="px-4 py-3 border-b border-border">
-        <h3 className="font-semibold text-sm">Annotations</h3>
+        <div className="flex items-center justify-between">
+          <h3 className="font-semibold text-sm">Annotations</h3>
+          {/* Scope toggle — only meaningful when a file is selected */}
+          {currentFilePath && (
+            <div className="flex bg-muted rounded p-0.5 gap-0.5 text-[10px]">
+              <button
+                onClick={() => setScope('current')}
+                className={`px-2 py-0.5 rounded transition ${
+                  scope === 'current'
+                    ? 'bg-background text-foreground shadow-sm'
+                    : 'text-gray-500 hover:text-foreground'
+                }`}
+                title="Show annotations on the current file"
+              >
+                This file
+              </button>
+              <button
+                onClick={() => setScope('all')}
+                className={`px-2 py-0.5 rounded transition ${
+                  scope === 'all'
+                    ? 'bg-background text-foreground shadow-sm'
+                    : 'text-gray-500 hover:text-foreground'
+                }`}
+                title="Show all annotations across every file in this session"
+              >
+                All files ({annotations.length})
+              </button>
+            </div>
+          )}
+        </div>
         <div className="flex gap-1 mt-2 flex-wrap">
           {(['all', 'open', 'done', 'resolved'] as const).map((f) => (
             <button
@@ -194,9 +250,20 @@ export default function AnnotationPanel({
                       {/* Comment */}
                       <p className="text-sm">{annotation.comment}</p>
 
-                      {/* File path */}
-                      <p className="text-[10px] text-gray-400 mt-1 font-mono truncate">
+                      {/* File path — more prominent in "all files" mode,
+                          since the same list may span many files */}
+                      <p
+                        className={`text-[10px] mt-1 font-mono truncate flex items-center gap-1 ${
+                          scope === 'all' && annotation.filePath !== currentFilePath
+                            ? 'text-accent'
+                            : 'text-gray-400'
+                        }`}
+                      >
+                        {scope === 'all' && <FileText size={10} className="shrink-0" />}
                         {annotation.filePath}
+                        {scope === 'all' && annotation.filePath !== currentFilePath && (
+                          <span className="ml-auto text-[9px] opacity-60">点击跳转</span>
+                        )}
                       </p>
 
                       {/* Replies */}
