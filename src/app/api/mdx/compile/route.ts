@@ -13,6 +13,26 @@ function stripImportsAndExports(source: string): string {
   return source
 }
 
+// MDX 3 compiles lowercase JSX tags like <img /> as native HTML intrinsic
+// elements and does NOT route them through the components map. This breaks
+// our Img stub (and therefore image annotation). Convert self-closing <img>
+// JSX with literal string src/alt into markdown `![alt](src)` so MDX sends
+// it through _components.img.
+//
+// Only touches cases where we can safely extract src/alt as string literals.
+// Imgs that use JSX expressions for src (like `<img src={foo} />`) fall
+// through untouched.
+function rewriteImgJsxToMarkdown(source: string): string {
+  return source.replace(/<img\b([^>]*?)\/>/g, (match, attrs: string) => {
+    const srcMatch = attrs.match(/\bsrc\s*=\s*"([^"]+)"|\bsrc\s*=\s*'([^']+)'/)
+    const src = srcMatch?.[1] ?? srcMatch?.[2]
+    if (!src) return match
+    const altMatch = attrs.match(/\balt\s*=\s*"([^"]*)"|\balt\s*=\s*'([^']*)'/)
+    const alt = altMatch?.[1] ?? altMatch?.[2] ?? ''
+    return `![${alt}](${src})`
+  })
+}
+
 export async function POST(req: NextRequest) {
   const session = await auth()
   if (!session?.user?.id) {
@@ -25,7 +45,7 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const cleaned = stripImportsAndExports(content)
+    const cleaned = rewriteImgJsxToMarkdown(stripImportsAndExports(content))
     const rehypePlugins =
       owner && repo && gitRef
         ? [[rehypeRewriteAssets, { owner, repo, gitRef }] as const]

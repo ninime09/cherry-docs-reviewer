@@ -143,13 +143,14 @@ export default function AnnotableImage({ src, alt, rawProps, className }: Annota
         draggable={false}
       />
 
-      {/* Hover toolbar */}
+      {/* Toolbar: always visible on hover; also visible at low opacity otherwise
+          to make it discoverable */}
       {mode === 'idle' && (
-        <span className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition flex gap-1 z-10">
+        <span className="absolute top-2 right-2 opacity-70 group-hover:opacity-100 transition flex gap-1 z-10 pointer-events-auto">
           <button
             type="button"
             onClick={annotateWholeImage}
-            className="flex items-center gap-1 px-2 py-1 bg-background/90 backdrop-blur border border-border rounded-md text-xs font-medium shadow hover:bg-accent hover:text-white transition"
+            className="flex items-center gap-1 px-2 py-1 bg-background border border-border rounded-md text-xs font-medium shadow hover:bg-accent hover:text-white transition"
             title="Annotate this whole image"
           >
             <MessageCircle size={12} />
@@ -158,7 +159,7 @@ export default function AnnotableImage({ src, alt, rawProps, className }: Annota
           <button
             type="button"
             onClick={enterDrawMode}
-            className="flex items-center gap-1 px-2 py-1 bg-background/90 backdrop-blur border border-border rounded-md text-xs font-medium shadow hover:bg-accent hover:text-white transition"
+            className="flex items-center gap-1 px-2 py-1 bg-background border border-border rounded-md text-xs font-medium shadow hover:bg-accent hover:text-white transition"
             title="Drag a rectangle on the image to annotate a region"
           >
             <Crop size={12} />
