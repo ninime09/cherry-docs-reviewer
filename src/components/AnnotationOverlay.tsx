@@ -264,74 +264,62 @@ export default function AnnotationOverlay({
     const a = annotations.find((x) => x.id === pending)
     if (!a) return
     const content = contentRef.current
-    const scroll = scrollContainerRef?.current
-    if (!content || !scroll) return
+    if (!content) return
 
-    const scrollRect = scroll.getBoundingClientRect()
-    // The y we want the target to land at, relative to scroll container top.
-    // Using clientHeight/3 keeps it visible but leaves room for context above.
-    const desiredY = scroll.clientHeight / 3
-
-    function scrollSoThatViewportY(viewportY: number) {
-      const delta = viewportY - (scrollRect.top + desiredY)
-      const target = Math.max(0, scroll!.scrollTop + delta)
-      scroll!.scrollTo({ top: target, behavior: 'smooth' })
-    }
-
-    // --- Text annotation: build a range and scroll to its top ---
-    if (a.type === 'text' && a.globalOffset != null && a.selectedText) {
-      const walker = document.createTreeWalker(content, NodeFilter.SHOW_TEXT)
-      let offset = 0
-      let startNode: Text | null = null
-      let startNodeOffset = 0
-      const target = a.globalOffset
-      let n: Node | null
-      while ((n = walker.nextNode())) {
-        const txt = n as Text
-        if (offset + txt.data.length > target) {
-          startNode = txt
-          startNodeOffset = target - offset
-          break
-        }
-        offset += txt.data.length
-      }
-      if (!startNode) return
-      try {
-        const range = document.createRange()
-        range.setStart(startNode, Math.max(0, Math.min(startNode.data.length, startNodeOffset)))
-        range.setEnd(startNode, Math.max(0, Math.min(startNode.data.length, startNodeOffset)))
-        const rect = range.getBoundingClientRect()
-        if (rect.top === 0 && rect.bottom === 0) return
-        scrollSoThatViewportY(rect.top)
-        pendingScrollRef.current = null
-      } catch {
-        // skip — invalid range
-      }
-      return
-    }
-
-    // --- Image / area annotation: scroll to the image (or region center) ---
+    // --- Image / area annotation ---
     if ((a.type === 'image' || a.type === 'area') && a.contextBefore) {
       const img = findAnnotationImage(content, a.contextBefore)
-      if (!img) return
+      if (!img) {
+        // eslint-disable-next-line no-console
+        console.debug('[annotation-scroll] image not found in DOM', {
+          storedSrc: a.contextBefore,
+        })
+        return
+      }
       const rect = img.getBoundingClientRect()
-      // Zero-sized image means still loading — retry on next positions update.
+      // Zero-sized means still loading — retry when positions update.
       if (rect.width === 0 && rect.height === 0) return
 
-      let targetViewportY = rect.top
+      // For area annotations, drop an ephemeral marker at the region center
+      // so scrollIntoView lands on the region, not the whole image.
       if (
         a.type === 'area' &&
         a.areaY != null &&
-        a.areaHeight != null
+        a.areaHeight != null &&
+        img.parentElement
       ) {
-        // Center the region in view instead of the image top.
-        targetViewportY =
-          rect.top + (a.areaY + a.areaHeight / 2) * rect.height - desiredY
+        const parent = img.parentElement
+        const prevPos = parent.style.position
+        const needsRelative = getComputedStyle(parent).position === 'static'
+        if (needsRelative) parent.style.position = 'relative'
+        const marker = document.createElement('div')
+        marker.style.cssText = `position:absolute;top:${
+          (a.areaY + a.areaHeight / 2) * 100
+        }%;left:0;width:1px;height:1px;pointer-events:none;`
+        parent.appendChild(marker)
+        marker.scrollIntoView({ block: 'center', behavior: 'smooth' })
+        // Remove the marker shortly after — smooth scroll completes in ~400ms.
+        setTimeout(() => {
+          marker.remove()
+          if (needsRelative) parent.style.position = prevPos
+        }, 600)
+      } else {
+        img.scrollIntoView({ block: 'center', behavior: 'smooth' })
       }
-      scrollSoThatViewportY(targetViewportY)
       pendingScrollRef.current = null
+      return
     }
-  }, [annotations, contentRef, scrollContainerRef])
+
+    // --- Text annotation: use existing positions map (text layout is stable
+    //     once content is rendered, so positions should be populated). ---
+    const pos = positions.get(a.id)
+    if (!pos || pos.kind !== 'text') return
+    const scroll = scrollContainerRef?.current
+    if (!scroll) return
+    const target = Math.max(0, pos.top - scroll.clientHeight / 3)
+    scroll.scrollTo({ top: target, behavior: 'smooth' })
+    pendingScrollRef.current = null
+  }, [annotations, contentRef, positions, scrollContainerRef])
 
   // Try to fulfill the pending scroll when: the active annotation changes,
   // positions get recomputed (images loaded / layout changed), or annotations
