@@ -20,6 +20,7 @@ import {
   PanelRight,
 } from 'lucide-react'
 import MdxRichPreview from '@/components/MdxRichPreview'
+import type { ImageAnnotationSelection } from '@/components/AnnotableImage'
 import VercelPreview from '@/components/VercelPreview'
 import AnnotationPanel from '@/components/AnnotationPanel'
 import CommentPopup from '@/components/CommentPopup'
@@ -59,6 +60,7 @@ export default function ReviewPage() {
     contextBefore: string
     contextAfter: string
   } | null>(null)
+  const [pendingImageSelection, setPendingImageSelection] = useState<ImageAnnotationSelection | null>(null)
   const [loading, setLoading] = useState(true)
   const [fileLoading, setFileLoading] = useState(false)
   const [fileError, setFileError] = useState('')
@@ -274,6 +276,35 @@ export default function ReviewPage() {
     })
     if (res.ok) {
       setPendingSelection(null)
+      loadAnnotations()
+    }
+  }
+
+  async function createImageAnnotation(comment: string) {
+    if (!pendingImageSelection || !selectedFile) return
+    const { src, alt, region } = pendingImageSelection
+    const res = await fetch('/api/annotations', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        sessionId,
+        type: region ? 'area' : 'image',
+        filePath: selectedFile,
+        // Overload existing fields to store image info:
+        //   selectedText = alt (so it shows nicely in panel)
+        //   contextBefore = image src (used to render thumbnail)
+        //   areaX/Y/Width/Height = region (normalized 0-1), only when region is set
+        selectedText: alt || '',
+        contextBefore: src,
+        areaX: region?.x ?? null,
+        areaY: region?.y ?? null,
+        areaWidth: region?.w ?? null,
+        areaHeight: region?.h ?? null,
+        comment,
+      }),
+    })
+    if (res.ok) {
+      setPendingImageSelection(null)
       loadAnnotations()
     }
   }
@@ -745,6 +776,7 @@ export default function ReviewPage() {
                   repo={sessionInfo.repo}
                   gitRef={sessionInfo.headSha || sessionInfo.branch}
                   onTextSelect={setPendingSelection}
+                  onImageSelect={setPendingImageSelection}
                   onAnnotationClick={setActiveAnnotationId}
                   activeAnnotationId={activeAnnotationId}
                 />
@@ -771,12 +803,21 @@ export default function ReviewPage() {
         )}
       </div>
 
-      {/* Comment popup */}
+      {/* Text comment popup */}
       {pendingSelection && (
         <CommentPopup
           selectedText={pendingSelection.text}
           onSubmit={createAnnotation}
           onCancel={() => setPendingSelection(null)}
+        />
+      )}
+
+      {/* Image / region comment popup */}
+      {pendingImageSelection && (
+        <CommentPopup
+          imageSelection={pendingImageSelection}
+          onSubmit={createImageAnnotation}
+          onCancel={() => setPendingImageSelection(null)}
         />
       )}
 

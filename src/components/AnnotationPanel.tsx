@@ -151,12 +151,45 @@ export default function AnnotationPanel({
                         </span>
                       </div>
 
-                      {/* Selected text */}
-                      {annotation.selectedText && (
+                      {/* Preview: image thumbnail for image/area, text quote otherwise */}
+                      {(annotation.type === 'image' || annotation.type === 'area') &&
+                      annotation.contextBefore ? (
+                        <div className="mb-1.5 rounded border border-border overflow-hidden bg-muted/30">
+                          <div className="relative">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img
+                              src={annotation.contextBefore}
+                              alt={annotation.selectedText || ''}
+                              className="block w-full max-h-32 object-contain bg-background"
+                            />
+                            {annotation.type === 'area' &&
+                              annotation.areaX != null &&
+                              annotation.areaY != null &&
+                              annotation.areaWidth != null &&
+                              annotation.areaHeight != null && (
+                                <div
+                                  className="absolute border-2 border-accent bg-accent/20 pointer-events-none"
+                                  style={{
+                                    left: `${annotation.areaX * 100}%`,
+                                    top: `${annotation.areaY * 100}%`,
+                                    width: `${annotation.areaWidth * 100}%`,
+                                    height: `${annotation.areaHeight * 100}%`,
+                                  }}
+                                />
+                              )}
+                          </div>
+                          {annotation.selectedText && (
+                            <div className="px-2 py-1 text-[10px] text-gray-500 border-t border-border truncate">
+                              {annotation.type === 'area' ? '🔲 region · ' : '🖼 image · '}
+                              {annotation.selectedText}
+                            </div>
+                          )}
+                        </div>
+                      ) : annotation.selectedText ? (
                         <div className="text-xs bg-yellow-50 px-2 py-1 rounded mb-1.5 text-yellow-800 line-clamp-2 font-mono">
                           &ldquo;{annotation.selectedText}&rdquo;
                         </div>
-                      )}
+                      ) : null}
 
                       {/* Comment */}
                       <p className="text-sm">{annotation.comment}</p>

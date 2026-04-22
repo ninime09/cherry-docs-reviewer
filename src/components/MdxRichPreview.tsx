@@ -5,6 +5,7 @@ import { MDXRemote, type MDXRemoteSerializeResult } from 'next-mdx-remote'
 import { Loader2, AlertCircle } from 'lucide-react'
 import { makeMdxComponents } from './mdx-components'
 import { ErrorBoundary } from './ErrorBoundary'
+import { ImageAnnotationProvider, type ImageAnnotationSelection } from './AnnotableImage'
 import type { AnnotationData } from '@/types'
 
 interface MdxRichPreviewProps {
@@ -20,6 +21,7 @@ interface MdxRichPreviewProps {
     contextBefore: string
     contextAfter: string
   }) => void
+  onImageSelect: (selection: ImageAnnotationSelection) => void
   onAnnotationClick: (id: string) => void
   activeAnnotationId?: string
 }
@@ -32,6 +34,7 @@ export default function MdxRichPreview({
   repo,
   gitRef,
   onTextSelect,
+  onImageSelect,
   onAnnotationClick,
   activeAnnotationId,
 }: MdxRichPreviewProps) {
@@ -186,7 +189,9 @@ export default function MdxRichPreview({
         {/* Body content with MDX-specific typography */}
         <article className="mdx-preview mx-auto max-w-3xl px-8 py-6">
           <ErrorBoundary>
-            <MDXRemote {...compiled} components={components} />
+            <ImageAnnotationProvider onImageAnnotate={onImageSelect}>
+              <MDXRemote {...compiled} components={components} />
+            </ImageAnnotationProvider>
           </ErrorBoundary>
         </article>
       </div>

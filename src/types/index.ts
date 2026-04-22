@@ -20,14 +20,20 @@ export interface PRFile {
 export interface AnnotationData {
   id: string
   sessionId: string
-  type: 'text' | 'area'
+  // text: drag-selected text | image: whole image | area: image region
+  type: 'text' | 'image' | 'area'
   filePath: string
   locale: string | null
+  // For text annotations: the selected text.
+  // For image/area annotations: the image's alt text (may be empty).
   selectedText: string | null
   globalOffset: number | null
+  // For text annotations: context around the selection.
+  // For image/area annotations (overloaded): the image src URL for thumbnail.
   contextBefore: string | null
   contextAfter: string | null
   sourceLine: number | null
+  // For area annotations only: region coords as normalized 0-1 values.
   areaX: number | null
   areaY: number | null
   areaWidth: number | null

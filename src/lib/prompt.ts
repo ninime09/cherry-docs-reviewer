@@ -32,11 +32,8 @@ export function generatePrompt(annotations: AnnotationData[]): string {
   for (const [filePath, items] of byFile) {
     lines.push(`## ${filePath}`)
     items.forEach((a, i) => {
-      const loc = a.sourceLine ? `L${a.sourceLine}` : ''
-      const quote = a.selectedText ? `\`${truncate(a.selectedText, 60)}\`` : ''
-      const locator = [loc, quote].filter(Boolean).join(' ')
-      const prefix = locator ? `[${locator}] ` : ''
       const comment = a.comment.replace(/\s+/g, ' ').trim()
+      const prefix = formatLocator(a)
       lines.push(`${i + 1}. ${prefix}${comment}`)
     })
     lines.push('')
@@ -52,4 +49,33 @@ export function generatePrompt(annotations: AnnotationData[]): string {
 function truncate(str: string, n: number): string {
   const s = str.replace(/\s+/g, ' ').trim()
   return s.length > n ? s.slice(0, n) + '…' : s
+}
+
+function formatLocator(a: AnnotationData): string {
+  // Image / region annotations: use contextBefore (image src) as the identifier.
+  if (a.type === 'image' || a.type === 'area') {
+    const src = a.contextBefore || ''
+    // Strip the github raw URL prefix if present — leave just the repo path
+    const cleanSrc = src.replace(/^https:\/\/raw\.githubusercontent\.com\/[^/]+\/[^/]+\/[^/]+\//, '')
+    const alt = a.selectedText ? ` "${truncate(a.selectedText, 40)}"` : ''
+    if (
+      a.type === 'area' &&
+      a.areaX != null &&
+      a.areaY != null &&
+      a.areaWidth != null &&
+      a.areaHeight != null
+    ) {
+      // Express as percentage rectangle for readability
+      const pct = (n: number) => Math.round(n * 100)
+      const region = `${pct(a.areaX)}%,${pct(a.areaY)} ${pct(a.areaWidth)}×${pct(a.areaHeight)}%`
+      return `[image \`${cleanSrc}\`${alt} · region ${region}] `
+    }
+    return `[image \`${cleanSrc}\`${alt}] `
+  }
+
+  // Text annotations
+  const loc = a.sourceLine ? `L${a.sourceLine}` : ''
+  const quote = a.selectedText ? `\`${truncate(a.selectedText, 60)}\`` : ''
+  const locator = [loc, quote].filter(Boolean).join(' ')
+  return locator ? `[${locator}] ` : ''
 }

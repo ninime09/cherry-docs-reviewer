@@ -2,6 +2,7 @@
 
 import { ReactNode } from 'react'
 import { Info, AlertCircle, AlertTriangle, CheckCircle2, HelpCircle } from 'lucide-react'
+import AnnotableImage from './AnnotableImage'
 
 /**
  * Stub implementations of Fumadocs UI components. Gives the Annotate mode
@@ -201,18 +202,19 @@ export function makeMdxComponents(ctx: {
     return `https://raw.githubusercontent.com/${ctx.owner}/${ctx.repo}/${ctx.gitRef}/${path}`
   }
 
-  // Every image in the preview goes through this component so its src is
-  // always resolved to an absolute GitHub raw URL.
+  // Every image in the preview goes through this component. The src is
+  // resolved to an absolute GitHub raw URL, and the image is wrapped with
+  // annotation UI (hover toolbar, region selection).
   function Img(props: React.ImgHTMLAttributes<HTMLImageElement>) {
-    const { src, className, ...rest } = props
+    const { src, alt, className, ...rest } = props
     const rawSrc = typeof src === 'string' ? src : undefined
     const resolved = resolveSrc(rawSrc)
-    // eslint-disable-next-line jsx-a11y/alt-text, @next/next/no-img-element
     return (
-      <img
-        {...rest}
+      <AnnotableImage
         src={resolved}
-        className={className || 'my-4 max-w-full rounded-lg border border-border'}
+        alt={typeof alt === 'string' ? alt : undefined}
+        className={typeof className === 'string' ? className : undefined}
+        rawProps={rest as React.ImgHTMLAttributes<HTMLImageElement>}
       />
     )
   }
