@@ -1,7 +1,37 @@
 'use client'
 
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { AnnotationData } from '@/types'
+
+// Find the <img> element for an image/area annotation. Tries exact src match
+// first (fast path), then falls back to matching by URL pathname — this keeps
+// annotations working when the session's gitRef drifts (branch → commit SHA).
+function findAnnotationImage(
+  content: HTMLElement,
+  storedSrc: string
+): HTMLImageElement | null {
+  const exact = content.querySelector<HTMLImageElement>(
+    `img[data-annotation-image="${CSS.escape(storedSrc)}"]`
+  )
+  if (exact) return exact
+
+  let storedPath: string | null = null
+  try {
+    storedPath = new URL(storedSrc).pathname
+  } catch {
+    return null
+  }
+  const all = content.querySelectorAll<HTMLImageElement>('img[data-annotation-image]')
+  for (const el of Array.from(all)) {
+    const src = el.getAttribute('data-annotation-image') || ''
+    try {
+      if (new URL(src).pathname === storedPath) return el
+    } catch {
+      // ignore
+    }
+  }
+  return null
+}
 
 type RectPos = { top: number; left: number; width: number; height: number }
 
@@ -121,16 +151,14 @@ export default function AnnotationOverlay({
       }
     }
 
-    // --- Image + area annotations: find by src ---
+    // --- Image + area annotations: find by src (with pathname fallback) ---
     const imageAnnotations = annotations.filter(
       (a) => (a.type === 'image' || a.type === 'area') && a.contextBefore
     )
     for (const a of imageAnnotations) {
       const src = a.contextBefore
       if (!src) continue
-      const img = content.querySelector<HTMLImageElement>(
-        `img[data-annotation-image="${CSS.escape(src)}"]`
-      )
+      const img = findAnnotationImage(content, src)
       if (!img) continue
       const rect = img.getBoundingClientRect()
       if (rect.width === 0 && rect.height === 0) continue
@@ -165,44 +193,152 @@ export default function AnnotationOverlay({
     setPositions(newPositions)
   }, [annotations, contentRef, version])
 
-  // Trigger recompute on scroll / resize / image load
+  // Trigger recompute on scroll / resize / image load.
+  // MDX recompiles replace <img> elements in place, so we also watch the
+  // content subtree for added images and hook their load events.
   useEffect(() => {
     const scroll = scrollContainerRef?.current ?? window
     const bump = () => setVersion((v) => v + 1)
     scroll.addEventListener('scroll', bump, { passive: true } as AddEventListenerOptions)
     window.addEventListener('resize', bump)
 
-    // Also recompute when any image in content finishes loading
     const content = contentRef.current
-    let imgs: HTMLImageElement[] = []
+    const hooked = new WeakSet<HTMLImageElement>()
+    function hookImg(img: HTMLImageElement) {
+      if (hooked.has(img)) return
+      hooked.add(img)
+      if (img.complete) {
+        // Already loaded — just bump once so positions pick it up.
+        bump()
+      } else {
+        img.addEventListener('load', bump)
+      }
+    }
+
     if (content) {
-      imgs = Array.from(content.querySelectorAll('img'))
-      imgs.forEach((img) => {
-        if (!img.complete) img.addEventListener('load', bump)
-      })
+      content.querySelectorAll('img').forEach(hookImg)
+    }
+
+    const observer = content
+      ? new MutationObserver((mutations) => {
+          for (const m of mutations) {
+            m.addedNodes.forEach((n) => {
+              if (n instanceof HTMLImageElement) {
+                hookImg(n)
+              } else if (n instanceof HTMLElement) {
+                n.querySelectorAll('img').forEach(hookImg)
+              }
+            })
+          }
+        })
+      : null
+    if (observer && content) {
+      observer.observe(content, { childList: true, subtree: true })
     }
 
     return () => {
       scroll.removeEventListener('scroll', bump)
       window.removeEventListener('resize', bump)
-      imgs.forEach((img) => img.removeEventListener('load', bump))
+      observer?.disconnect()
+      // Listeners attached via hookImg will be GC'd with the elements.
     }
-  }, [scrollContainerRef, contentRef, annotations])
+  }, [scrollContainerRef, contentRef])
 
-  // Scroll active annotation into view
+  // Scroll active annotation into view.
+  //
+  // We resolve the target element lazily from the DOM (not from `positions`)
+  // so the scroll still fires even when MDX was just recompiled and the
+  // positions map hasn't been recomputed yet for the new elements. A pending
+  // ref keeps retrying until the target is resolvable (e.g. once the image
+  // finishes loading and has non-zero size), after which it clears so later
+  // version bumps from user scrolling don't snap us back.
+  const pendingScrollRef = useRef<string | null>(null)
+
   useEffect(() => {
-    if (!activeAnnotationId) return
-    const pos = positions.get(activeAnnotationId)
-    if (!pos) return
-    const scroll = scrollContainerRef?.current
-    const overlay = overlayRef.current
-    if (!scroll || !overlay) return
+    if (activeAnnotationId) pendingScrollRef.current = activeAnnotationId
+  }, [activeAnnotationId])
 
-    // Position of the target within the scroll container
-    const targetTopInContent = pos.top
-    const scrollTargetTop = Math.max(0, targetTopInContent - scroll.clientHeight / 3)
-    scroll.scrollTo({ top: scrollTargetTop, behavior: 'smooth' })
-  }, [activeAnnotationId, positions, scrollContainerRef])
+  const tryScrollToAnnotation = useCallback(() => {
+    const pending = pendingScrollRef.current
+    if (!pending) return
+    const a = annotations.find((x) => x.id === pending)
+    if (!a) return
+    const content = contentRef.current
+    const scroll = scrollContainerRef?.current
+    if (!content || !scroll) return
+
+    const scrollRect = scroll.getBoundingClientRect()
+    // The y we want the target to land at, relative to scroll container top.
+    // Using clientHeight/3 keeps it visible but leaves room for context above.
+    const desiredY = scroll.clientHeight / 3
+
+    function scrollSoThatViewportY(viewportY: number) {
+      const delta = viewportY - (scrollRect.top + desiredY)
+      const target = Math.max(0, scroll!.scrollTop + delta)
+      scroll!.scrollTo({ top: target, behavior: 'smooth' })
+    }
+
+    // --- Text annotation: build a range and scroll to its top ---
+    if (a.type === 'text' && a.globalOffset != null && a.selectedText) {
+      const walker = document.createTreeWalker(content, NodeFilter.SHOW_TEXT)
+      let offset = 0
+      let startNode: Text | null = null
+      let startNodeOffset = 0
+      const target = a.globalOffset
+      let n: Node | null
+      while ((n = walker.nextNode())) {
+        const txt = n as Text
+        if (offset + txt.data.length > target) {
+          startNode = txt
+          startNodeOffset = target - offset
+          break
+        }
+        offset += txt.data.length
+      }
+      if (!startNode) return
+      try {
+        const range = document.createRange()
+        range.setStart(startNode, Math.max(0, Math.min(startNode.data.length, startNodeOffset)))
+        range.setEnd(startNode, Math.max(0, Math.min(startNode.data.length, startNodeOffset)))
+        const rect = range.getBoundingClientRect()
+        if (rect.top === 0 && rect.bottom === 0) return
+        scrollSoThatViewportY(rect.top)
+        pendingScrollRef.current = null
+      } catch {
+        // skip — invalid range
+      }
+      return
+    }
+
+    // --- Image / area annotation: scroll to the image (or region center) ---
+    if ((a.type === 'image' || a.type === 'area') && a.contextBefore) {
+      const img = findAnnotationImage(content, a.contextBefore)
+      if (!img) return
+      const rect = img.getBoundingClientRect()
+      // Zero-sized image means still loading — retry on next positions update.
+      if (rect.width === 0 && rect.height === 0) return
+
+      let targetViewportY = rect.top
+      if (
+        a.type === 'area' &&
+        a.areaY != null &&
+        a.areaHeight != null
+      ) {
+        // Center the region in view instead of the image top.
+        targetViewportY =
+          rect.top + (a.areaY + a.areaHeight / 2) * rect.height - desiredY
+      }
+      scrollSoThatViewportY(targetViewportY)
+      pendingScrollRef.current = null
+    }
+  }, [annotations, contentRef, scrollContainerRef])
+
+  // Try to fulfill the pending scroll when: the active annotation changes,
+  // positions get recomputed (images loaded / layout changed), or annotations
+  // list updates. Idempotent — once pending clears, later calls noop.
+  useEffect(() => {
+    tryScrollToAnnotation()
+  }, [activeAnnotationId, positions, tryScrollToAnnotation])
 
   // Stable ordinal based on the annotation's position in the full list
   const ordinalById = new Map<string, number>()
@@ -255,18 +391,21 @@ export default function AnnotationOverlay({
             />
           )
         } else if (pos.kind === 'image') {
+          // Idle: no decoration (badge is enough). Active: solid accent ring
+          // so it's immediately obvious which image the annotation is on.
           highlights.push(
             <div
               key={`hl-${a.id}`}
-              className={`absolute rounded border-2 pointer-events-none ${
-                isActive ? `ring-2 ${colors.ring} animate-pulse` : ''
+              className={`absolute rounded pointer-events-none ${
+                isActive
+                  ? 'ring-4 ring-accent ring-offset-2 ring-offset-background animate-pulse'
+                  : ''
               }`}
               style={{
                 top: pos.top,
                 left: pos.left,
                 width: pos.width,
                 height: pos.height,
-                borderColor: 'transparent',
               }}
             />
           )
