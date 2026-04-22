@@ -6,6 +6,7 @@ import { Loader2, AlertCircle } from 'lucide-react'
 import { makeMdxComponents } from './mdx-components'
 import { ErrorBoundary } from './ErrorBoundary'
 import { ImageAnnotationProvider, type ImageAnnotationSelection } from './AnnotableImage'
+import AnnotationOverlay from './AnnotationOverlay'
 import type { AnnotationData } from '@/types'
 
 interface MdxRichPreviewProps {
@@ -39,6 +40,7 @@ export default function MdxRichPreview({
   activeAnnotationId,
 }: MdxRichPreviewProps) {
   const contentRef = useRef<HTMLDivElement>(null)
+  const scrollRef = useRef<HTMLDivElement>(null)
   const [compiled, setCompiled] = useState<MDXRemoteSerializeResult | null>(null)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
@@ -173,9 +175,9 @@ export default function MdxRichPreview({
   if (!compiled) return null
 
   return (
-    <div className="flex-1 overflow-auto bg-background">
+    <div ref={scrollRef} className="flex-1 overflow-auto bg-background relative">
       {/* Wrapper holds the annotation-selectable area: hero + body */}
-      <div ref={contentRef}>
+      <div ref={contentRef} className="relative">
         {/* Frontmatter hero */}
         {frontmatter.title && (
           <div className="border-b border-border bg-muted/30 px-8 py-6">
@@ -194,22 +196,16 @@ export default function MdxRichPreview({
             </ImageAnnotationProvider>
           </ErrorBoundary>
         </article>
-      </div>
 
-      {/* Annotation markers (reserved) */}
-      {annotations.map((a, i) => (
-        <button
-          key={a.id}
-          onClick={() => onAnnotationClick(a.id)}
-          className={`fixed z-20 ${
-            activeAnnotationId === a.id ? 'ring-2 ring-accent scale-110' : ''
-          }`}
-          style={{ display: 'none' }}
-          title={a.comment}
-        >
-          <span className="annotation-badge">{i + 1}</span>
-        </button>
-      ))}
+        {/* Highlight + numbered badge overlay layer */}
+        <AnnotationOverlay
+          annotations={annotations}
+          contentRef={contentRef}
+          scrollContainerRef={scrollRef}
+          onAnnotationClick={onAnnotationClick}
+          activeAnnotationId={activeAnnotationId}
+        />
+      </div>
     </div>
   )
 }

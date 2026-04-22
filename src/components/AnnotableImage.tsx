@@ -127,6 +127,7 @@ export default function AnnotableImage({ src, alt, rawProps, className }: Annota
         {...rawProps}
         src={src}
         alt={alt}
+        data-annotation-image={src}
         className={className || 'my-4 max-w-full rounded-lg border border-border'}
       />
     )
@@ -139,6 +140,7 @@ export default function AnnotableImage({ src, alt, rawProps, className }: Annota
         {...rawProps}
         src={src}
         alt={alt}
+        data-annotation-image={src}
         className={className || 'my-4 max-w-full rounded-lg border border-border'}
         draggable={false}
       />
