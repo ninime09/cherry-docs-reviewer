@@ -1,9 +1,10 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { MDXRemote, type MDXRemoteSerializeResult } from 'next-mdx-remote'
 import { Loader2, AlertCircle } from 'lucide-react'
 import { makeMdxComponents } from './mdx-components'
+import { ErrorBoundary } from './ErrorBoundary'
 import type { AnnotationData } from '@/types'
 
 interface MdxRichPreviewProps {
@@ -128,7 +129,19 @@ export default function MdxRichPreview({
   // Infer locale from file path so LocalizedImage picks the right srcMap key.
   // content/docs/zh/... → 'zh', content/docs/en/... → 'en', etc.
   const locale = filePath.match(/content\/docs\/([^/]+)\//)?.[1]
-  const components = makeMdxComponents({ owner, repo, gitRef, locale })
+
+  // Scan MDX source for any uppercase JSX component names we haven't stubbed
+  // explicitly. MDX's compiled code uses object spread (not Proxy-aware) to
+  // build its components table, so we need real own-keys for every ref.
+  const extraComponents = useMemo(() => {
+    const set = new Set<string>()
+    const re = /<([A-Z]\w*)/g
+    let m
+    while ((m = re.exec(content))) set.add(m[1])
+    return Array.from(set)
+  }, [content])
+
+  const components = makeMdxComponents({ owner, repo, gitRef, locale, extraComponents })
   const frontmatter = (compiled?.frontmatter ?? {}) as Record<string, string>
 
   if (loading && !compiled) {
@@ -172,7 +185,9 @@ export default function MdxRichPreview({
 
         {/* Body content with MDX-specific typography */}
         <article className="mdx-preview mx-auto max-w-3xl px-8 py-6">
-          <MDXRemote {...compiled} components={components} />
+          <ErrorBoundary>
+            <MDXRemote {...compiled} components={components} />
+          </ErrorBoundary>
         </article>
       </div>
 

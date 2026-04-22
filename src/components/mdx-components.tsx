@@ -184,6 +184,14 @@ export function makeMdxComponents(ctx: {
   repo: string
   gitRef: string
   locale?: string
+  /**
+   * Names of additional JSX components that appear in the MDX source but
+   * aren't in our explicit stub list. We generate UnknownComponent fallback
+   * entries for each. We can't use a Proxy because MDX's compiled code uses
+   * object spread to build its components table, which only iterates own
+   * keys — Proxy-intercepted lookups are never hit.
+   */
+  extraComponents?: string[]
 }) {
   function resolveSrc(src?: string): string {
     if (!src) return ''
@@ -270,16 +278,17 @@ export function makeMdxComponents(ctx: {
     img: Img as unknown as React.ComponentType<Record<string, unknown>>,
   }
 
-  return new Proxy(explicit, {
-    get(target, prop) {
-      if (prop in target) return target[prop as string]
-      if (typeof prop !== 'string') return undefined
-      if (!/^[A-Z]/.test(prop)) return undefined
-      const Fallback = (props: Record<string, unknown>) => (
-        <UnknownComponent name={prop} {...props} />
-      )
-      Fallback.displayName = `Unknown(${prop})`
-      return Fallback
-    },
-  })
+  // Add explicit stub entries for any extra JSX component names we detected
+  // in the source. Real own-keys, so MDX's object-spread resolves them.
+  for (const name of ctx.extraComponents || []) {
+    if (name in explicit) continue
+    if (!/^[A-Z]/.test(name)) continue
+    const Fallback = (props: Record<string, unknown>) => (
+      <UnknownComponent name={name} {...props} />
+    )
+    Fallback.displayName = `Unknown(${name})`
+    explicit[name] = Fallback as unknown as React.ComponentType<Record<string, unknown>>
+  }
+
+  return explicit
 }
