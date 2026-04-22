@@ -1,0 +1,14 @@
+{
+  "manifest_version": 3,
+  "name": "Cherry Docs Reviewer Helper",
+  "version": "1.0.0",
+  "description": "Auto-syncs the Vercel preview URL back to the review tool so you don't have to paste it manually when navigating inside the iframe.",
+  "content_scripts": [
+    {
+      "matches": ["https://*.vercel.app/*"],
+      "js": ["content.js"],
+      "all_frames": true,
+      "run_at": "document_start"
+    }
+  ]
+}

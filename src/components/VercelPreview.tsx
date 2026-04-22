@@ -61,6 +61,33 @@ export default function VercelPreview({
     if (editingPath) inputRef.current?.select()
   }, [editingPath])
 
+  // Listen for iframe-nav messages from the Cherry Docs Reviewer Helper
+  // browser extension (see /extension). When the user navigates inside the
+  // iframe, the extension posts the new path here so we can sync our URL bar.
+  useEffect(() => {
+    function onMessage(e: MessageEvent) {
+      if (!preview?.url) return
+      // Only accept messages from the preview's own origin
+      try {
+        const previewOrigin = new URL(preview.url).origin
+        if (e.origin !== previewOrigin) return
+      } catch {
+        return
+      }
+      const data = e.data
+      if (!data || typeof data !== 'object') return
+      if (data.type !== 'cherry-docs-reviewer:iframe-nav') return
+      const pathname = typeof data.pathname === 'string' ? data.pathname : null
+      if (!pathname) return
+      if (pathname === pagePath) return
+      onPagePathChange(pathname)
+      // Navigation came from extension — dismiss the manual-sync warning
+      setNavigated(false)
+    }
+    window.addEventListener('message', onMessage)
+    return () => window.removeEventListener('message', onMessage)
+  }, [preview?.url, pagePath, onPagePathChange])
+
   function commitPathEdit() {
     let p = pathInput.trim()
     // Strip the base URL if user pasted the full URL
@@ -240,8 +267,16 @@ export default function VercelPreview({
         </div>
       ) : (
         <div className="px-3 py-1 border-t border-border bg-muted/30 text-[10px] text-gray-400 shrink-0">
-          💡 Browser security prevents us from auto-detecting navigation inside the iframe.
-          If you clicked around, paste the current URL above, then switch to Annotate to open that file.
+          💡 Install the{' '}
+          <a
+            href="https://github.com/ninime09/cherry-docs-reviewer/tree/main/extension"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="underline hover:text-accent"
+          >
+            Cherry Docs Reviewer Helper
+          </a>{' '}
+          extension to auto-sync the URL bar with iframe navigation. Otherwise, paste the current URL above manually.
         </div>
       )}
     </div>
