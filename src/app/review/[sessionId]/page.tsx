@@ -18,6 +18,8 @@ import {
   Pencil,
   PanelLeft,
   PanelRight,
+  RefreshCw,
+  X,
 } from 'lucide-react'
 import MdxRichPreview from '@/components/MdxRichPreview'
 import type { ImageAnnotationSelection } from '@/components/AnnotableImage'
@@ -68,6 +70,11 @@ export default function ReviewPage() {
   const [copied, setCopied] = useState(false)
   const [diffData, setDiffData] = useState<{ original: string; fixed: string } | null>(null)
   const [commitLoading, setCommitLoading] = useState(false)
+  const [refreshing, setRefreshing] = useState(false)
+  const [refreshStatus, setRefreshStatus] = useState<null | {
+    kind: 'up-to-date' | 'updated' | 'error'
+    message: string
+  }>(null)
   const [approvedChanges, setApprovedChanges] = useState<Map<string, string>>(new Map())
   const [showSummary, setShowSummary] = useState(false)
   const [summaryMarkdown, setSummaryMarkdown] = useState('')
@@ -442,6 +449,44 @@ export default function ReviewPage() {
   }
 
   // Commit approved changes
+  // Refresh: re-fetch PR info from GitHub and update the session's headSha.
+  // Also reloads the currently open file so its content reflects the new commit.
+  async function refreshSession() {
+    if (!sessionInfo || refreshing) return
+    setRefreshing(true)
+    setRefreshStatus(null)
+    try {
+      const res = await fetch(`/api/sessions/${sessionInfo.id}`, { method: 'PATCH' })
+      const data = await res.json()
+      if (!res.ok) {
+        throw new Error(data.error || 'Refresh failed')
+      }
+      setSessionInfo(data)
+
+      if (data.headShaChanged) {
+        setRefreshStatus({
+          kind: 'updated',
+          message: `Updated to ${String(data.headSha || '').slice(0, 7)}. Existing annotations preserved, but text positions may drift if code was edited.`,
+        })
+        // Reload the current file from the new commit
+        if (selectedFile) await loadFile(selectedFile)
+      } else {
+        setRefreshStatus({
+          kind: 'up-to-date',
+          message: 'Already on the latest commit.',
+        })
+      }
+    } catch (e) {
+      setRefreshStatus({
+        kind: 'error',
+        message: e instanceof Error ? e.message : 'Refresh failed',
+      })
+    } finally {
+      setRefreshing(false)
+      setTimeout(() => setRefreshStatus(null), 5000)
+    }
+  }
+
   async function commitChanges() {
     if (!sessionInfo || approvedChanges.size === 0) return
     setCommitLoading(true)
@@ -531,6 +576,15 @@ export default function ReviewPage() {
         </div>
 
         <div className="flex items-center gap-2">
+          <button
+            onClick={refreshSession}
+            disabled={refreshing}
+            className="flex items-center gap-1.5 px-3 py-1.5 border border-border rounded-lg text-sm font-medium hover:bg-muted disabled:opacity-50 transition"
+            title="Re-fetch the PR from GitHub — use this after the PR receives new commits"
+          >
+            <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} />
+            {refreshing ? 'Refreshing...' : 'Refresh'}
+          </button>
           <button
             onClick={copyPrompt}
             disabled={annotations.filter((a) => a.status === 'open').length === 0}
@@ -819,6 +873,32 @@ export default function ReviewPage() {
           onSubmit={createImageAnnotation}
           onCancel={() => setPendingImageSelection(null)}
         />
+      )}
+
+      {/* Refresh status toast */}
+      {refreshStatus && (
+        <div
+          className={`fixed bottom-4 right-4 z-40 max-w-sm px-4 py-3 rounded-lg shadow-lg border text-sm ${
+            refreshStatus.kind === 'error'
+              ? 'bg-red-50 border-red-200 text-red-800'
+              : refreshStatus.kind === 'updated'
+                ? 'bg-blue-50 border-blue-200 text-blue-800'
+                : 'bg-green-50 border-green-200 text-green-800'
+          }`}
+        >
+          <div className="flex items-start gap-2">
+            <span className="shrink-0">
+              {refreshStatus.kind === 'updated' ? '🔄' : refreshStatus.kind === 'error' ? '⚠️' : '✓'}
+            </span>
+            <span className="flex-1">{refreshStatus.message}</span>
+            <button
+              onClick={() => setRefreshStatus(null)}
+              className="shrink-0 opacity-60 hover:opacity-100"
+            >
+              <X size={14} />
+            </button>
+          </div>
+        </div>
       )}
 
       {/* PR Description summary modal */}
