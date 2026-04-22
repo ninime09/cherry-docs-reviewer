@@ -30,6 +30,48 @@
   }
 }
 
+/* Thin, subtle scrollbars throughout the app.
+   Defaults to nearly-invisible, tints up on hover, matches light/dark. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(148, 148, 148, 0.28) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+*::-webkit-scrollbar-thumb {
+  background: rgba(148, 148, 148, 0.28);
+  border-radius: 6px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: rgba(148, 148, 148, 0.55);
+  background-clip: content-box;
+}
+*::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+@media (prefers-color-scheme: dark) {
+  * {
+    scrollbar-color: rgba(180, 180, 180, 0.22) transparent;
+  }
+  *::-webkit-scrollbar-thumb {
+    background: rgba(180, 180, 180, 0.22);
+    background-clip: content-box;
+  }
+  *::-webkit-scrollbar-thumb:hover {
+    background: rgba(180, 180, 180, 0.45);
+    background-clip: content-box;
+  }
+}
+
 /* Annotation highlight styles */
 mark.review-highlight {
   background: rgba(255, 235, 59, 0.4);
