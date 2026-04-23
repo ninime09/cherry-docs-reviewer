@@ -3,9 +3,30 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { AnnotationData } from '@/types'
 
+// Reduce an image URL to a gitRef-independent "stable" path so annotations
+// keep matching after the session pulls a new PR commit (headSha changes).
+//
+//   raw.githubusercontent.com/{owner}/{repo}/{ref}/{...rest}
+//     → {...rest}         e.g. "public/images/foo.png"
+//
+// For any other host, fall back to the full pathname.
+function stableImagePath(url: string): string {
+  try {
+    const u = new URL(url)
+    if (u.hostname === 'raw.githubusercontent.com') {
+      const parts = u.pathname.split('/').filter(Boolean)
+      if (parts.length >= 4) return parts.slice(3).join('/')
+    }
+    return u.pathname
+  } catch {
+    return url
+  }
+}
+
 // Find the <img> element for an image/area annotation. Tries exact src match
-// first (fast path), then falls back to matching by URL pathname — this keeps
-// annotations working when the session's gitRef drifts (branch → commit SHA).
+// first (fast path), then falls back to matching by stable path — this keeps
+// annotations working when the session's gitRef drifts (Refresh pulls a new
+// commit and every GitHub raw URL gets a new SHA in its path).
 function findAnnotationImage(
   content: HTMLElement,
   storedSrc: string
@@ -15,20 +36,12 @@ function findAnnotationImage(
   )
   if (exact) return exact
 
-  let storedPath: string | null = null
-  try {
-    storedPath = new URL(storedSrc).pathname
-  } catch {
-    return null
-  }
+  const storedStable = stableImagePath(storedSrc)
+  if (!storedStable) return null
   const all = content.querySelectorAll<HTMLImageElement>('img[data-annotation-image]')
   for (const el of Array.from(all)) {
     const src = el.getAttribute('data-annotation-image') || ''
-    try {
-      if (new URL(src).pathname === storedPath) return el
-    } catch {
-      // ignore
-    }
+    if (stableImagePath(src) === storedStable) return el
   }
   return null
 }
