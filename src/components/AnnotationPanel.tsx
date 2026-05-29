@@ -27,6 +27,11 @@ interface AnnotationPanelProps {
   onReply: (id: string, comment: string) => void
   onDelete: (id: string) => void
   currentUserId?: string
+  /** Hide the "This file / All files" scope toggle. Useful when the surface
+   *  has a single content body (e.g. /article/[id]) where the toggle is noise. */
+  hideFileScope?: boolean
+  /** Override the panel's outer className (width / border). Default w-80. */
+  className?: string
 }
 
 const STATUS_CONFIG = {
@@ -45,6 +50,8 @@ export default function AnnotationPanel({
   onReply,
   onDelete,
   currentUserId,
+  hideFileScope = false,
+  className = 'w-80',
 }: AnnotationPanelProps) {
   const [replyingTo, setReplyingTo] = useState<string | null>(null)
   const [replyText, setReplyText] = useState('')
@@ -106,13 +113,15 @@ export default function AnnotationPanel({
   }
 
   return (
-    <div className="w-80 border-l border-border flex flex-col bg-background overflow-hidden">
+    <div className={`${className} border-l border-border flex flex-col bg-background overflow-hidden`}>
       {/* Header */}
-      <div className="px-4 py-3 border-b border-border">
+      <div className="px-5 py-4 border-b border-border">
         <div className="flex items-center justify-between">
-          <h3 className="font-semibold text-sm">Annotations</h3>
-          {/* Scope toggle — only meaningful when a file is selected */}
-          {currentFilePath && (
+          <h3 className="font-semibold text-base">Annotations</h3>
+          {/* Scope toggle — only meaningful when a file is selected AND the
+              surface actually has multiple files (PR review). Article surfaces
+              opt out with hideFileScope. */}
+          {currentFilePath && !hideFileScope && (
             <div className="flex bg-muted rounded p-0.5 gap-0.5 text-[10px]">
               <button
                 onClick={() => setScope('current')}
@@ -139,12 +148,12 @@ export default function AnnotationPanel({
             </div>
           )}
         </div>
-        <div className="flex gap-1 mt-2 flex-wrap">
+        <div className="flex gap-1.5 mt-3 flex-wrap">
           {(['all', 'open', 'done', 'resolved'] as const).map((f) => (
             <button
               key={f}
               onClick={() => setFilter(f)}
-              className={`px-2 py-0.5 rounded text-xs font-medium transition ${
+              className={`px-2.5 py-1 rounded-md text-xs font-medium transition ${
                 filter === f
                   ? 'bg-accent text-white'
                   : 'bg-muted text-gray-600 hover:bg-gray-200'
@@ -159,8 +168,10 @@ export default function AnnotationPanel({
       {/* Annotation list */}
       <div className="flex-1 overflow-auto">
         {filtered.length === 0 ? (
-          <div className="p-6 text-center text-sm text-gray-400">
-            No annotations yet. Select text in the preview to add one.
+          <div className="px-6 py-12 text-center text-sm text-gray-400 leading-relaxed">
+            No annotations yet.
+            <br />
+            Select text or click an image to add one.
           </div>
         ) : (
           Object.entries(groups).map(([status, items]) => {

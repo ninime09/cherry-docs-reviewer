@@ -297,20 +297,22 @@ export default function ArticlePage() {
 
   return (
     <div className="flex h-screen flex-col bg-background">
-      {/* Top bar — single-line breadcrumb, matches /review/[sessionId] style */}
-      <header className="border-b border-border px-4 py-2 flex items-center justify-between shrink-0">
-        <div className="flex items-center gap-3 min-w-0">
-          <button
-            onClick={() => router.push('/articles')}
-            className="text-gray-400 hover:text-foreground transition shrink-0"
-            title="Back to articles"
-          >
-            <ArrowLeft size={18} />
-          </button>
-          <div className="flex items-center gap-2 text-sm min-w-0">
-            <span className="font-mono text-gray-500 shrink-0">article/{article.slug.slice(0, 24)}{article.slug.length > 24 ? '…' : ''}</span>
+      {/* Top bar — two-line: breadcrumb on top, large title below */}
+      <header className="border-b border-border px-5 py-3.5 flex items-start justify-between gap-4 shrink-0">
+        <div className="min-w-0 flex-1">
+          {/* Top breadcrumb line: back arrow + slug + status pill */}
+          <div className="flex items-center gap-2 text-xs text-gray-500">
+            <button
+              onClick={() => router.push('/articles')}
+              className="text-gray-400 hover:text-foreground transition shrink-0"
+              title="Back to articles"
+            >
+              <ArrowLeft size={14} />
+            </button>
+            <span className="font-mono shrink-0">article / {article.slug.slice(0, 32)}{article.slug.length > 32 ? '…' : ''}</span>
+            <ChevronRight size={12} className="text-gray-300 shrink-0" />
             <span
-              className={`text-[10px] px-1.5 py-0.5 rounded font-medium uppercase tracking-wider shrink-0 ${
+              className={`text-[10px] px-1.5 py-0.5 rounded font-semibold uppercase tracking-wider shrink-0 ${
                 article.status === 'REVIEWING'
                   ? 'bg-yellow-100 text-yellow-800'
                   : article.status === 'APPROVED'
@@ -322,13 +324,19 @@ export default function ArticlePage() {
             >
               {article.status}
             </span>
-            <ChevronRight size={14} className="text-gray-300 shrink-0" />
-            <span className="truncate">{article.title}</span>
+            {article.source && (
+              <>
+                <ChevronRight size={12} className="text-gray-300 shrink-0" />
+                <span className="shrink-0">via {article.source}</span>
+              </>
+            )}
           </div>
+          {/* Big title */}
+          <h1 className="mt-1.5 text-base font-semibold truncate text-foreground">{article.title}</h1>
         </div>
         <button
           onClick={() => setRightSidebarOpen((v) => !v)}
-          className={`p-1 rounded hover:bg-muted transition shrink-0 ${
+          className={`mt-1 p-1.5 rounded hover:bg-muted transition shrink-0 ${
             rightSidebarOpen ? 'text-foreground' : 'text-gray-400'
           }`}
           title="Toggle annotations panel"
@@ -367,18 +375,18 @@ export default function ArticlePage() {
         </div>
 
         {rightSidebarOpen && (
-          <div className="w-[380px] shrink-0 border-l">
-            <AnnotationPanel
-              annotations={annotations}
-              currentFilePath={ARTICLE_FILE_PATH}
-              activeId={activeAnnotationId}
-              onSelect={setActiveAnnotationId}
-              onStatusChange={updateStatus}
-              onReply={replyToAnnotation}
-              onDelete={deleteAnnotation}
-              currentUserId={session?.user?.id}
-            />
-          </div>
+          <AnnotationPanel
+            annotations={annotations}
+            currentFilePath={ARTICLE_FILE_PATH}
+            activeId={activeAnnotationId}
+            onSelect={setActiveAnnotationId}
+            onStatusChange={updateStatus}
+            onReply={replyToAnnotation}
+            onDelete={deleteAnnotation}
+            currentUserId={session?.user?.id}
+            hideFileScope
+            className="w-96 shrink-0"
+          />
         )}
       </div>
 
