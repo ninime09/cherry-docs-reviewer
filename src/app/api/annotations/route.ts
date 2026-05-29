@@ -2,6 +2,21 @@ import { NextRequest } from 'next/server'
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 
+// Touch the parent (ReviewSession or Article) so polling clients see "something changed".
+async function touchParent(opts: { sessionId?: string | null; articleId?: string | null }) {
+  if (opts.sessionId) {
+    await prisma.reviewSession.update({
+      where: { id: opts.sessionId },
+      data: { updatedAt: new Date() },
+    })
+  } else if (opts.articleId) {
+    await prisma.article.update({
+      where: { id: opts.articleId },
+      data: { updatedAt: new Date() },
+    })
+  }
+}
+
 export async function GET(req: NextRequest) {
   const session = await auth()
   if (!session?.user?.id) {
@@ -9,14 +24,17 @@ export async function GET(req: NextRequest) {
   }
 
   const sessionId = req.nextUrl.searchParams.get('sessionId')
+  const articleId = req.nextUrl.searchParams.get('articleId')
   const filePath = req.nextUrl.searchParams.get('filePath')
   const since = req.nextUrl.searchParams.get('since') // ISO timestamp for polling
 
-  if (!sessionId) {
-    return Response.json({ error: 'Missing sessionId' }, { status: 400 })
+  if (!sessionId && !articleId) {
+    return Response.json({ error: 'Missing sessionId or articleId' }, { status: 400 })
   }
 
-  const where: Record<string, unknown> = { sessionId }
+  const where: Record<string, unknown> = {}
+  if (sessionId) where.sessionId = sessionId
+  if (articleId) where.articleId = articleId
   if (filePath) where.filePath = filePath
   if (since) where.updatedAt = { gt: new Date(since) }
 
@@ -36,6 +54,7 @@ export async function GET(req: NextRequest) {
     annotations.map((a) => ({
       id: a.id,
       sessionId: a.sessionId,
+      articleId: a.articleId,
       type: a.type,
       filePath: a.filePath,
       locale: a.locale,
@@ -70,44 +89,44 @@ export async function POST(req: NextRequest) {
 
   const body = await req.json()
   const {
-    sessionId, type, filePath, locale,
+    sessionId, articleId, type, filePath, locale,
     selectedText, globalOffset, contextBefore, contextAfter, sourceLine,
     areaX, areaY, areaWidth, areaHeight,
     comment,
   } = body
 
-  if (!sessionId || !type || !filePath || !comment) {
+  if ((!sessionId && !articleId) || (sessionId && articleId)) {
+    return Response.json({ error: 'Provide exactly one of sessionId or articleId' }, { status: 400 })
+  }
+  if (!type || !filePath || !comment) {
     return Response.json({ error: 'Missing required fields' }, { status: 400 })
   }
 
-  const [annotation] = await prisma.$transaction([
-    prisma.annotation.create({
-      data: {
-        sessionId,
-        type,
-        filePath,
-        locale: locale || null,
-        selectedText: selectedText || null,
-        globalOffset: globalOffset ?? null,
-        contextBefore: contextBefore || null,
-        contextAfter: contextAfter || null,
-        sourceLine: sourceLine ?? null,
-        areaX: areaX ?? null,
-        areaY: areaY ?? null,
-        areaWidth: areaWidth ?? null,
-        areaHeight: areaHeight ?? null,
-        comment,
-        reviewerId: session.user.id,
-      },
-      include: {
-        reviewer: { select: { id: true, name: true, image: true } },
-      },
-    }),
-    prisma.reviewSession.update({
-      where: { id: sessionId },
-      data: { updatedAt: new Date() },
-    }),
-  ])
+  const annotation = await prisma.annotation.create({
+    data: {
+      sessionId: sessionId || null,
+      articleId: articleId || null,
+      type,
+      filePath,
+      locale: locale || null,
+      selectedText: selectedText || null,
+      globalOffset: globalOffset ?? null,
+      contextBefore: contextBefore || null,
+      contextAfter: contextAfter || null,
+      sourceLine: sourceLine ?? null,
+      areaX: areaX ?? null,
+      areaY: areaY ?? null,
+      areaWidth: areaWidth ?? null,
+      areaHeight: areaHeight ?? null,
+      comment,
+      reviewerId: session.user.id,
+    },
+    include: {
+      reviewer: { select: { id: true, name: true, image: true } },
+    },
+  })
+
+  await touchParent({ sessionId, articleId })
 
   return Response.json(annotation, { status: 201 })
 }
@@ -124,19 +143,10 @@ export async function PATCH(req: NextRequest) {
     return Response.json({ error: 'Missing annotation id' }, { status: 400 })
   }
 
-  // Look up the annotation's sessionId so we can touch updatedAt
   const existing = await prisma.annotation.findUnique({
     where: { id },
-    select: { sessionId: true },
+    select: { sessionId: true, articleId: true },
   })
-
-  async function touchSession() {
-    if (!existing) return
-    await prisma.reviewSession.update({
-      where: { id: existing.sessionId },
-      data: { updatedAt: new Date() },
-    })
-  }
 
   // Add a reply
   if (reply) {
@@ -148,7 +158,7 @@ export async function PATCH(req: NextRequest) {
       },
       include: { author: { select: { id: true, name: true, image: true } } },
     })
-    await touchSession()
+    if (existing) await touchParent(existing)
     return Response.json(newReply)
   }
 
@@ -161,7 +171,7 @@ export async function PATCH(req: NextRequest) {
     where: { id },
     data: updateData,
   })
-  await touchSession()
+  if (existing) await touchParent(existing)
 
   return Response.json(updated)
 }
@@ -175,14 +185,9 @@ export async function DELETE(req: NextRequest) {
   const { id } = await req.json()
   const existing = await prisma.annotation.findUnique({
     where: { id },
-    select: { sessionId: true },
+    select: { sessionId: true, articleId: true },
   })
   await prisma.annotation.delete({ where: { id } })
-  if (existing) {
-    await prisma.reviewSession.update({
-      where: { id: existing.sessionId },
-      data: { updatedAt: new Date() },
-    })
-  }
+  if (existing) await touchParent(existing)
   return Response.json({ ok: true })
 }

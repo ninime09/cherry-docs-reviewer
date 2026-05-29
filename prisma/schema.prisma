@@ -34,6 +34,7 @@ model User {
   accounts       Account[]
   authSessions   Session[]
   reviewSessions ReviewSession[] @relation("CreatedBy")
+  articles       Article[]       @relation("ArticleCreatedBy")
   annotations    Annotation[]
   replies        Reply[]
 }
@@ -75,10 +76,13 @@ model ReviewSession {
 
 model Annotation {
   id            String   @id @default(cuid())
-  sessionId     String
-  session       ReviewSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  // Target: either a PR review session OR a wechat article. App layer must enforce exactly one is set.
+  sessionId     String?
+  session       ReviewSession? @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  articleId     String?
+  article       Article?       @relation(fields: [articleId], references: [id], onDelete: Cascade)
   type          String   // text, area
-  filePath      String
+  filePath      String   // For ReviewSession: MDX file path. For Article: "article" (single content body).
   locale        String?
   // Text selection fields
   selectedText  String?
@@ -102,6 +106,27 @@ model Annotation {
 
   @@index([sessionId])
   @@index([sessionId, filePath])
+  @@index([articleId])
+}
+
+// WeChat (and similar long-form) articles batched for team review.
+// Snapshot HTML is stored in full (incl. base64 images) so reviewers see the exact published surface.
+model Article {
+  id           String       @id @default(cuid())
+  slug         String       @unique
+  title        String
+  digest       String?      // Short summary shown in lists (max ~120 chars in WeChat)
+  htmlSnapshot String       @db.Text  // Full HTML with inlined base64 images
+  status       String       @default("REVIEWING") // REVIEWING, APPROVED, PUBLISHED, ARCHIVED
+  source       String?      // Origin marker, e.g. "cherry-wechat-publisher"
+  createdBy    User         @relation("ArticleCreatedBy", fields: [createdById], references: [id])
+  createdById  String
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  annotations  Annotation[]
+
+  @@index([createdById])
+  @@index([status])
 }
 
 model Reply {

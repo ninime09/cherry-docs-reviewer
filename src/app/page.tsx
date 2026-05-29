@@ -3,7 +3,8 @@
 import { useSession, signIn, signOut } from 'next-auth/react'
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { LogIn, LogOut, Plus, ExternalLink, MessageSquare } from 'lucide-react'
+import Link from 'next/link'
+import { LogIn, LogOut, Plus, ExternalLink, MessageSquare, FileText } from 'lucide-react'
 
 function formatRelativeTime(iso: string): string {
   const d = new Date(iso)
@@ -93,6 +94,14 @@ export default function Home() {
         </div>
         {session?.user ? (
           <div className="flex items-center gap-3">
+            <Link
+              href="/articles"
+              className="text-sm text-gray-500 hover:text-foreground flex items-center gap-1"
+            >
+              <FileText size={14} />
+              Articles
+            </Link>
+            <span className="text-gray-300 text-xs">·</span>
             <img
               src={session.user.image || ''}
               alt=""
