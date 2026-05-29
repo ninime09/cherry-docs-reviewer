@@ -115,9 +115,9 @@ export default function AnnotationPanel({
   return (
     <div className={`${className} border-l border-border flex flex-col bg-background overflow-hidden`}>
       {/* Header */}
-      <div className="px-5 py-4 border-b border-border">
+      <div className="px-6 py-5 border-b border-border">
         <div className="flex items-center justify-between">
-          <h3 className="font-semibold text-base">Annotations</h3>
+          <h3 className="font-semibold text-base tracking-tight">Annotations</h3>
           {/* Scope toggle — only meaningful when a file is selected AND the
               surface actually has multiple files (PR review). Article surfaces
               opt out with hideFileScope. */}
@@ -148,12 +148,12 @@ export default function AnnotationPanel({
             </div>
           )}
         </div>
-        <div className="flex gap-1.5 mt-3 flex-wrap">
+        <div className="flex gap-2 mt-4 flex-wrap">
           {(['all', 'open', 'done', 'resolved'] as const).map((f) => (
             <button
               key={f}
               onClick={() => setFilter(f)}
-              className={`px-2.5 py-1 rounded-md text-xs font-medium transition ${
+              className={`px-3 py-1.5 rounded-md text-xs font-medium transition ${
                 filter === f
                   ? 'bg-accent text-white'
                   : 'bg-muted text-gray-600 hover:bg-gray-200'
@@ -168,10 +168,9 @@ export default function AnnotationPanel({
       {/* Annotation list */}
       <div className="flex-1 overflow-auto">
         {filtered.length === 0 ? (
-          <div className="px-6 py-12 text-center text-sm text-gray-400 leading-relaxed">
-            No annotations yet.
-            <br />
-            Select text or click an image to add one.
+          <div className="px-8 py-16 text-center text-sm text-gray-400 leading-relaxed">
+            <p className="font-medium text-gray-500 mb-1">No annotations yet</p>
+            <p>Select text or click an image to add one.</p>
           </div>
         ) : (
           Object.entries(groups).map(([status, items]) => {

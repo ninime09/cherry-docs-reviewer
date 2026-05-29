@@ -297,22 +297,22 @@ export default function ArticlePage() {
 
   return (
     <div className="flex h-screen flex-col bg-background">
-      {/* Top bar — two-line: breadcrumb on top, large title below */}
-      <header className="border-b border-border px-5 py-3.5 flex items-start justify-between gap-4 shrink-0">
+      {/* Top bar */}
+      <header className="border-b border-border px-6 py-4 flex items-start justify-between gap-6 shrink-0">
         <div className="min-w-0 flex-1">
-          {/* Top breadcrumb line: back arrow + slug + status pill */}
-          <div className="flex items-center gap-2 text-xs text-gray-500">
+          {/* Breadcrumb row */}
+          <div className="flex items-center gap-2 text-xs text-gray-500 mb-2">
             <button
               onClick={() => router.push('/articles')}
-              className="text-gray-400 hover:text-foreground transition shrink-0"
+              className="inline-flex h-7 w-7 items-center justify-center rounded-md text-gray-400 hover:bg-muted hover:text-foreground transition shrink-0"
               title="Back to articles"
             >
               <ArrowLeft size={14} />
             </button>
-            <span className="font-mono shrink-0">article / {article.slug.slice(0, 32)}{article.slug.length > 32 ? '…' : ''}</span>
+            <span className="font-mono shrink-0">article</span>
             <ChevronRight size={12} className="text-gray-300 shrink-0" />
             <span
-              className={`text-[10px] px-1.5 py-0.5 rounded font-semibold uppercase tracking-wider shrink-0 ${
+              className={`text-[10px] px-2 py-0.5 rounded font-semibold uppercase tracking-wider shrink-0 ${
                 article.status === 'REVIEWING'
                   ? 'bg-yellow-100 text-yellow-800'
                   : article.status === 'APPROVED'
@@ -325,19 +325,18 @@ export default function ArticlePage() {
               {article.status}
             </span>
             {article.source && (
-              <>
-                <ChevronRight size={12} className="text-gray-300 shrink-0" />
-                <span className="shrink-0">via {article.source}</span>
-              </>
+              <span className="shrink-0 text-gray-400">· via {article.source}</span>
             )}
           </div>
-          {/* Big title */}
-          <h1 className="mt-1.5 text-base font-semibold truncate text-foreground">{article.title}</h1>
+          {/* Title */}
+          <h1 className="text-[15px] font-semibold leading-snug text-foreground line-clamp-2">{article.title}</h1>
         </div>
         <button
           onClick={() => setRightSidebarOpen((v) => !v)}
-          className={`mt-1 p-1.5 rounded hover:bg-muted transition shrink-0 ${
-            rightSidebarOpen ? 'text-foreground' : 'text-gray-400'
+          className={`inline-flex h-9 w-9 items-center justify-center rounded-md border border-border transition shrink-0 ${
+            rightSidebarOpen
+              ? 'bg-muted text-foreground'
+              : 'text-gray-400 hover:bg-muted hover:text-foreground'
           }`}
           title="Toggle annotations panel"
         >
