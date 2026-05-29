@@ -7,6 +7,7 @@ import { Loader2, PanelRight, PanelRightClose } from 'lucide-react'
 import AnnotationOverlay from '@/components/AnnotationOverlay'
 import AnnotationPanel from '@/components/AnnotationPanel'
 import CommentPopup from '@/components/CommentPopup'
+import type { ImageAnnotationSelection } from '@/components/AnnotableImage'
 import type { AnnotationData } from '@/types'
 
 interface ArticleMeta {
@@ -43,6 +44,7 @@ export default function ArticlePage() {
   const [articleError, setArticleError] = useState<string | null>(null)
   const [annotations, setAnnotations] = useState<AnnotationData[]>([])
   const [pendingSelection, setPendingSelection] = useState<PendingSelection | null>(null)
+  const [pendingImageSelection, setPendingImageSelection] = useState<ImageAnnotationSelection | null>(null)
   const [activeAnnotationId, setActiveAnnotationId] = useState<string | undefined>()
   const [rightSidebarOpen, setRightSidebarOpen] = useState(true)
 
@@ -139,6 +141,46 @@ export default function ArticlePage() {
     return () => document.removeEventListener('mouseup', handleMouseUp)
   }, [])
 
+  // --- Image click → image annotation (MVP: whole image; no region selection yet) ---
+  // The article HTML is injected via dangerouslySetInnerHTML, so we can't use
+  // <AnnotableImage>. Instead we walk the rendered DOM after each render and
+  // attach a lightweight click handler to every <img>. AnnotationOverlay needs
+  // data-annotation-image to find the image for positioning the badge.
+  useEffect(() => {
+    const container = contentRef.current
+    if (!container || !article) return
+
+    const imgs = Array.from(container.querySelectorAll<HTMLImageElement>('img'))
+
+    function makeHandler(img: HTMLImageElement) {
+      return (e: MouseEvent) => {
+        e.preventDefault()
+        e.stopPropagation()
+        setPendingImageSelection({
+          src: img.src,
+          alt: img.alt || undefined,
+          region: null,
+        })
+      }
+    }
+
+    const cleanups: Array<() => void> = []
+    for (const img of imgs) {
+      img.style.cursor = 'pointer'
+      if (!img.dataset.annotationImage) img.dataset.annotationImage = img.src
+      const handler = makeHandler(img)
+      img.addEventListener('click', handler)
+      cleanups.push(() => {
+        img.removeEventListener('click', handler)
+        img.style.cursor = ''
+      })
+    }
+
+    return () => {
+      for (const c of cleanups) c()
+    }
+  }, [article])
+
   // --- Annotation CRUD ---
   async function createAnnotation(comment: string) {
     if (!pendingSelection || !article) return
@@ -158,6 +200,32 @@ export default function ArticlePage() {
     })
     if (res.ok) {
       setPendingSelection(null)
+      loadAnnotations()
+    }
+  }
+
+  async function createImageAnnotation(comment: string) {
+    if (!pendingImageSelection || !article) return
+    const { src, alt, region } = pendingImageSelection
+    const res = await fetch('/api/annotations', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        articleId: article.id,
+        type: region ? 'area' : 'image',
+        filePath: ARTICLE_FILE_PATH,
+        // Match review-page convention: alt -> selectedText, src -> contextBefore.
+        selectedText: alt || '',
+        contextBefore: src,
+        areaX: region?.x ?? null,
+        areaY: region?.y ?? null,
+        areaWidth: region?.w ?? null,
+        areaHeight: region?.h ?? null,
+        comment,
+      }),
+    })
+    if (res.ok) {
+      setPendingImageSelection(null)
       loadAnnotations()
     }
   }
@@ -258,16 +326,23 @@ export default function ArticlePage() {
 
       {/* Main */}
       <div className="flex flex-1 overflow-hidden">
-        <div ref={scrollContainerRef} className="relative flex-1 overflow-y-auto">
+        <div ref={scrollContainerRef} className="relative flex-1 overflow-y-auto bg-neutral-100 dark:bg-neutral-900">
           <div className="mx-auto max-w-2xl px-4 py-8">
-            <div
-              ref={contentRef}
-              className="cherry-article"
-              // Article HTML is produced by cherry-wechat-publisher (trusted internal tool).
-              // No <script>/<link>/<style> in the published surface; React's default
-              // dangerouslySetInnerHTML won't execute scripts either.
-              dangerouslySetInnerHTML={{ __html: article.htmlSnapshot }}
-            />
+            {/* Light surface — publisher HTML uses inline color:#27282d / #464646 etc
+                designed for a white background. Forcing a white container avoids the
+                "dark theme + dark text = unreadable" problem from the original report. */}
+            <div className="rounded-lg bg-white text-neutral-900 shadow-sm">
+              <div
+                ref={contentRef}
+                className="cherry-article px-4 py-6 [&_img]:max-w-full [&_img]:h-auto"
+                // htmlSnapshot is server-side sanitized (sanitizeArticleHtml strips
+                // shell <script>/<style>/<link> and extracts #content innerHTML).
+                dangerouslySetInnerHTML={{ __html: article.htmlSnapshot }}
+              />
+            </div>
+            <p className="mt-3 text-center text-xs text-muted-foreground">
+              划选文字 / 点击图片 即可批注
+            </p>
           </div>
           <AnnotationOverlay
             annotations={annotations}
@@ -299,6 +374,14 @@ export default function ArticlePage() {
           selectedText={pendingSelection.text}
           onSubmit={createAnnotation}
           onCancel={() => setPendingSelection(null)}
+        />
+      )}
+
+      {pendingImageSelection && (
+        <CommentPopup
+          imageSelection={pendingImageSelection}
+          onSubmit={createImageAnnotation}
+          onCancel={() => setPendingImageSelection(null)}
         />
       )}
     </div>

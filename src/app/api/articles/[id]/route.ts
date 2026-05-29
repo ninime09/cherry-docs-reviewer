@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server'
 import { getApiAuthUser } from '@/lib/api-auth'
 import { prisma } from '@/lib/prisma'
+import { sanitizeArticleHtml } from '@/lib/sanitize-article'
 
 // Resolve either a cuid (`id`) or a slug. Slugs may contain CJK characters,
 // so we can't rely on a charset test — try id first, fall back to slug.
@@ -69,7 +70,7 @@ export async function PATCH(
   if (title !== undefined) updateData.title = title
   if (digest !== undefined) updateData.digest = digest
   if (status !== undefined) updateData.status = status
-  if (htmlSnapshot !== undefined) updateData.htmlSnapshot = htmlSnapshot
+  if (htmlSnapshot !== undefined) updateData.htmlSnapshot = sanitizeArticleHtml(htmlSnapshot)
 
   if (Object.keys(updateData).length === 0) {
     return Response.json({ error: 'No fields to update' }, { status: 400 })

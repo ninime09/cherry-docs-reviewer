@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server'
 import { getApiAuthUser } from '@/lib/api-auth'
 import { prisma } from '@/lib/prisma'
+import { sanitizeArticleHtml } from '@/lib/sanitize-article'
 
 // Slug-ify Chinese / mixed titles into a URL-safe-ish handle.
 // We don't try to transliterate; we just keep alnums and replace the rest with "-".
@@ -44,7 +45,7 @@ export async function POST(req: NextRequest) {
       title,
       slug,
       digest: digest || null,
-      htmlSnapshot,
+      htmlSnapshot: sanitizeArticleHtml(htmlSnapshot),
       source: source || null,
       createdById: user.id,
     },
