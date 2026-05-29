@@ -3,7 +3,8 @@
 import { useSession } from 'next-auth/react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useParams } from 'next/navigation'
-import { Loader2, PanelRight, PanelRightClose } from 'lucide-react'
+import { Loader2, PanelRight, ArrowLeft, ChevronRight } from 'lucide-react'
+import { useRouter } from 'next/navigation'
 import AnnotationOverlay from '@/components/AnnotationOverlay'
 import AnnotationPanel from '@/components/AnnotationPanel'
 import CommentPopup from '@/components/CommentPopup'
@@ -38,6 +39,7 @@ const ARTICLE_FILE_PATH = 'article'
 export default function ArticlePage() {
   const params = useParams<{ id: string }>()
   const articleId = params?.id
+  const router = useRouter()
   const { data: session, status: sessionStatus } = useSession()
 
   const [article, setArticle] = useState<ArticleMeta | null>(null)
@@ -295,32 +297,43 @@ export default function ArticlePage() {
 
   return (
     <div className="flex h-screen flex-col bg-background">
-      {/* Top bar */}
-      <header className="flex items-center justify-between border-b px-4 py-3">
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2 text-xs uppercase tracking-wider text-muted-foreground">
-            <span>Article</span>
-            <span>·</span>
-            <span>{article.status.toLowerCase()}</span>
-            {article.source && (
-              <>
-                <span>·</span>
-                <span>{article.source}</span>
-              </>
-            )}
+      {/* Top bar — single-line breadcrumb, matches /review/[sessionId] style */}
+      <header className="border-b border-border px-4 py-2 flex items-center justify-between shrink-0">
+        <div className="flex items-center gap-3 min-w-0">
+          <button
+            onClick={() => router.push('/articles')}
+            className="text-gray-400 hover:text-foreground transition shrink-0"
+            title="Back to articles"
+          >
+            <ArrowLeft size={18} />
+          </button>
+          <div className="flex items-center gap-2 text-sm min-w-0">
+            <span className="font-mono text-gray-500 shrink-0">article/{article.slug.slice(0, 24)}{article.slug.length > 24 ? '…' : ''}</span>
+            <span
+              className={`text-[10px] px-1.5 py-0.5 rounded font-medium uppercase tracking-wider shrink-0 ${
+                article.status === 'REVIEWING'
+                  ? 'bg-yellow-100 text-yellow-800'
+                  : article.status === 'APPROVED'
+                    ? 'bg-green-100 text-green-800'
+                    : article.status === 'PUBLISHED'
+                      ? 'bg-blue-100 text-blue-800'
+                      : 'bg-gray-100 text-gray-500'
+              }`}
+            >
+              {article.status}
+            </span>
+            <ChevronRight size={14} className="text-gray-300 shrink-0" />
+            <span className="truncate">{article.title}</span>
           </div>
-          <h1 className="mt-1 truncate text-lg font-semibold">{article.title}</h1>
-          {article.digest && (
-            <p className="mt-0.5 truncate text-sm text-muted-foreground">{article.digest}</p>
-          )}
         </div>
         <button
-          type="button"
           onClick={() => setRightSidebarOpen((v) => !v)}
-          className="ml-4 inline-flex h-9 w-9 items-center justify-center rounded-md border text-muted-foreground hover:bg-muted"
-          title={rightSidebarOpen ? 'Hide annotations panel' : 'Show annotations panel'}
+          className={`p-1 rounded hover:bg-muted transition shrink-0 ${
+            rightSidebarOpen ? 'text-foreground' : 'text-gray-400'
+          }`}
+          title="Toggle annotations panel"
         >
-          {rightSidebarOpen ? <PanelRightClose className="h-4 w-4" /> : <PanelRight className="h-4 w-4" />}
+          <PanelRight size={16} />
         </button>
       </header>
 
