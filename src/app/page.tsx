@@ -4,7 +4,7 @@ import { useSession, signIn, signOut } from 'next-auth/react'
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { LogIn, LogOut, Plus, ExternalLink, MessageSquare, FileText } from 'lucide-react'
+import { LogIn, LogOut, Plus, ExternalLink, MessageSquare, FileText, KeyRound } from 'lucide-react'
 
 function formatRelativeTime(iso: string): string {
   const d = new Date(iso)
@@ -100,6 +100,13 @@ export default function Home() {
             >
               <FileText size={14} />
               Articles
+            </Link>
+            <Link
+              href="/settings/tokens"
+              className="text-sm text-gray-500 hover:text-foreground flex items-center gap-1"
+            >
+              <KeyRound size={14} />
+              Tokens
             </Link>
             <span className="text-gray-300 text-xs">·</span>
             <img

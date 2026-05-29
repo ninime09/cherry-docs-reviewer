@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server'
-import { auth } from '@/lib/auth'
+import { getApiAuthUser } from '@/lib/api-auth'
 import { prisma } from '@/lib/prisma'
 
 // Slug-ify Chinese / mixed titles into a URL-safe-ish handle.
@@ -25,8 +25,8 @@ async function ensureUniqueSlug(base: string): Promise<string> {
 }
 
 export async function POST(req: NextRequest) {
-  const session = await auth()
-  if (!session?.user?.id) {
+  const user = await getApiAuthUser(req)
+  if (!user) {
     return Response.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
@@ -46,7 +46,7 @@ export async function POST(req: NextRequest) {
       digest: digest || null,
       htmlSnapshot,
       source: source || null,
-      createdById: session.user.id,
+      createdById: user.id,
     },
     select: {
       id: true,
@@ -64,9 +64,9 @@ export async function POST(req: NextRequest) {
 // Team-wide visibility: every authenticated user sees every article.
 // htmlSnapshot is intentionally excluded — listing thousands of base64-laden
 // rows would balloon the response. Use GET /api/articles/:id for the full body.
-export async function GET() {
-  const session = await auth()
-  if (!session?.user?.id) {
+export async function GET(req: NextRequest) {
+  const user = await getApiAuthUser(req)
+  if (!user) {
     return Response.json({ error: 'Unauthorized' }, { status: 401 })
   }
 

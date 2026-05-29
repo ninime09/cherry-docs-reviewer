@@ -37,6 +37,22 @@ model User {
   articles       Article[]       @relation("ArticleCreatedBy")
   annotations    Annotation[]
   replies        Reply[]
+  apiTokens      ApiToken[]
+}
+
+// Personal access tokens for CLI / script integrations (e.g. push_to_reviewer.py).
+// Plaintext token is only ever shown once at creation; we store sha256 hash.
+model ApiToken {
+  id         String    @id @default(cuid())
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name       String    // user-supplied label
+  tokenHash  String    @unique  // sha256 of the plaintext token
+  prefix     String    // first 12 chars of the plaintext, for display in the UI
+  lastUsedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([userId])
 }
 
 model Session {

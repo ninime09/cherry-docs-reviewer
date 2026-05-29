@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server'
-import { auth } from '@/lib/auth'
+import { getApiAuthUser } from '@/lib/api-auth'
 import { prisma } from '@/lib/prisma'
 
 // Resolve either a cuid (`id`) or a slug. Slugs may contain CJK characters,
@@ -23,11 +23,11 @@ async function findByIdOrSlug(idOrSlug: string) {
 }
 
 export async function GET(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const auth0 = await auth()
-  if (!auth0?.user?.id) {
+  const user = await getApiAuthUser(req)
+  if (!user) {
     return Response.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
@@ -54,8 +54,8 @@ export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const auth0 = await auth()
-  if (!auth0?.user?.id) {
+  const user = await getApiAuthUser(req)
+  if (!user) {
     return Response.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
@@ -92,11 +92,11 @@ export async function PATCH(
 }
 
 export async function DELETE(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const auth0 = await auth()
-  if (!auth0?.user?.id) {
+  const user = await getApiAuthUser(req)
+  if (!user) {
     return Response.json({ error: 'Unauthorized' }, { status: 401 })
   }
 

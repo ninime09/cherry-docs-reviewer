@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server'
-import { auth } from '@/lib/auth'
+import { getApiAuthUser } from '@/lib/api-auth'
 import { prisma } from '@/lib/prisma'
 
 // Touch the parent (ReviewSession or Article) so polling clients see "something changed".
@@ -18,8 +18,8 @@ async function touchParent(opts: { sessionId?: string | null; articleId?: string
 }
 
 export async function GET(req: NextRequest) {
-  const session = await auth()
-  if (!session?.user?.id) {
+  const user = await getApiAuthUser(req)
+  if (!user) {
     return Response.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
@@ -82,8 +82,8 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const session = await auth()
-  if (!session?.user?.id) {
+  const user = await getApiAuthUser(req)
+  if (!user) {
     return Response.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
@@ -119,7 +119,7 @@ export async function POST(req: NextRequest) {
       areaWidth: areaWidth ?? null,
       areaHeight: areaHeight ?? null,
       comment,
-      reviewerId: session.user.id,
+      reviewerId: user.id,
     },
     include: {
       reviewer: { select: { id: true, name: true, image: true } },
@@ -132,8 +132,8 @@ export async function POST(req: NextRequest) {
 }
 
 export async function PATCH(req: NextRequest) {
-  const session = await auth()
-  if (!session?.user?.id) {
+  const user = await getApiAuthUser(req)
+  if (!user) {
     return Response.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
@@ -153,7 +153,7 @@ export async function PATCH(req: NextRequest) {
     const newReply = await prisma.reply.create({
       data: {
         annotationId: id,
-        authorId: session.user.id,
+        authorId: user.id,
         comment: reply,
       },
       include: { author: { select: { id: true, name: true, image: true } } },
@@ -177,8 +177,8 @@ export async function PATCH(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
-  const session = await auth()
-  if (!session?.user?.id) {
+  const user = await getApiAuthUser(req)
+  if (!user) {
     return Response.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
