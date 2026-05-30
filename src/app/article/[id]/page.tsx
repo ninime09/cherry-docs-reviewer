@@ -3,7 +3,7 @@
 import { useSession } from 'next-auth/react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useParams } from 'next/navigation'
-import { Loader2, PanelRight, ArrowLeft, ChevronRight } from 'lucide-react'
+import { Loader2, PanelRight, ArrowLeft, ChevronRight, Download } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import AnnotationOverlay from '@/components/AnnotationOverlay'
 import AnnotationPanel from '@/components/AnnotationPanel'
@@ -340,17 +340,30 @@ export default function ArticlePage() {
           {/* Title */}
           <h1 className="text-[15px] font-semibold leading-snug text-foreground line-clamp-2">{article.title}</h1>
         </div>
-        <button
-          onClick={() => setRightSidebarOpen((v) => !v)}
-          className={`inline-flex h-9 w-9 items-center justify-center rounded-md border border-border transition shrink-0 ${
-            rightSidebarOpen
-              ? 'bg-muted text-foreground'
-              : 'text-gray-400 hover:bg-muted hover:text-foreground'
-          }`}
-          title="Toggle annotations panel"
-        >
-          <PanelRight size={16} />
-        </button>
+        <div className="flex items-center gap-2 shrink-0">
+          {/* Download standalone HTML with the publisher shell wrapped back on,
+              so the user can copy-paste it into the WeChat editor as a fallback
+              when the draft API path is blocked (no AppSecret, IP whitelist, etc). */}
+          <a
+            href={`/api/articles/${encodeURIComponent(article.id)}/export`}
+            download={`cherry-wechat-${article.slug}.html`}
+            className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-border text-gray-400 hover:bg-muted hover:text-foreground transition"
+            title="Download as standalone HTML (with copy-to-WeChat button)"
+          >
+            <Download size={16} />
+          </a>
+          <button
+            onClick={() => setRightSidebarOpen((v) => !v)}
+            className={`inline-flex h-9 w-9 items-center justify-center rounded-md border border-border transition ${
+              rightSidebarOpen
+                ? 'bg-muted text-foreground'
+                : 'text-gray-400 hover:bg-muted hover:text-foreground'
+            }`}
+            title="Toggle annotations panel"
+          >
+            <PanelRight size={16} />
+          </button>
+        </div>
       </header>
 
       {/* Main */}
