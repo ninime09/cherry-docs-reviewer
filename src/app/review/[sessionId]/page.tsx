@@ -346,6 +346,18 @@ export default function ReviewPage() {
     loadAnnotations()
   }
 
+  // Re-open & edit: replace the comment text and set status back to open.
+  // Used when a reviewer reads the Agent's resolved fix and wants to ask
+  // for further changes.
+  async function editAndReopen(id: string, comment: string) {
+    await fetch('/api/annotations', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, comment, status: 'open' }),
+    })
+    loadAnnotations()
+  }
+
   // AI detect issues
   async function detectIssues() {
     if (!selectedFile || !fileContent) return
@@ -861,6 +873,7 @@ export default function ReviewPage() {
             onStatusChange={updateStatus}
             onReply={replyToAnnotation}
             onDelete={deleteAnnotation}
+            onEditAndReopen={editAndReopen}
             currentUserId={session?.user?.id}
           />
         )}

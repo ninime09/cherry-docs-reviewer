@@ -12,6 +12,8 @@ import {
   ChevronDown,
   ChevronRight,
   FileText,
+  Pencil,
+  RefreshCw,
 } from 'lucide-react'
 import type { AnnotationData } from '@/types'
 
@@ -26,6 +28,10 @@ interface AnnotationPanelProps {
   onStatusChange: (id: string, status: string) => void
   onReply: (id: string, comment: string) => void
   onDelete: (id: string) => void
+  /** Re-open a resolved/done annotation with an edited comment. Server should
+   *  set status=open and replace the comment. If not provided, the "Re-open &
+   *  Edit" UI is hidden. */
+  onEditAndReopen?: (id: string, comment: string) => void
   currentUserId?: string
   /** Hide the "This file / All files" scope toggle. Useful when the surface
    *  has a single content body (e.g. /article/[id]) where the toggle is noise. */
@@ -49,12 +55,15 @@ export default function AnnotationPanel({
   onStatusChange,
   onReply,
   onDelete,
+  onEditAndReopen,
   currentUserId,
   hideFileScope = false,
   className = 'w-80',
 }: AnnotationPanelProps) {
   const [replyingTo, setReplyingTo] = useState<string | null>(null)
   const [replyText, setReplyText] = useState('')
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editText, setEditText] = useState('')
   const [filter, setFilter] = useState<string>('all')
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set())
   // Scope: whether to show annotations on the current file only or across all
@@ -110,6 +119,23 @@ export default function AnnotationPanel({
     if (next.has(status)) next.delete(status)
     else next.add(status)
     setCollapsedGroups(next)
+  }
+
+  function startEdit(id: string, currentComment: string) {
+    setEditingId(id)
+    setEditText(currentComment)
+  }
+
+  function submitEdit(id: string) {
+    if (!editText.trim() || !onEditAndReopen) return
+    onEditAndReopen(id, editText.trim())
+    setEditingId(null)
+    setEditText('')
+  }
+
+  function cancelEdit() {
+    setEditingId(null)
+    setEditText('')
   }
 
   return (
@@ -288,35 +314,41 @@ export default function AnnotationPanel({
                         </div>
                       )}
 
-                      {/* Actions */}
+                      {/* Actions
+                          Status flow:
+                            open     → [Done] [Won't fix]
+                            resolved → [Done] [Re-open & Edit]   ← Agent finished, human reviews
+                            done     → [Re-open & Edit]          ← changed mind
+                            wontfix  → [Re-open & Edit]          ← changed mind
+                       */}
                       <div className="flex items-center gap-1 mt-2">
-                        {annotation.status === 'open' && (
+                        {(annotation.status === 'open' || annotation.status === 'resolved') && (
                           <button
                             onClick={(e) => {
                               e.stopPropagation()
                               onStatusChange(annotation.id, 'done')
                             }}
                             className="flex items-center gap-1 px-2 py-1 rounded text-[11px] font-medium bg-green-50 text-green-700 hover:bg-green-100 transition"
-                            title="Mark as done"
+                            title={annotation.status === 'resolved' ? 'Accept the change and close this annotation' : 'Mark as done'}
                           >
                             <Check size={12} />
                             Done
                           </button>
                         )}
-                        {annotation.status === 'done' && (
+                        {annotation.status !== 'open' && onEditAndReopen && (
                           <button
                             onClick={(e) => {
                               e.stopPropagation()
-                              onStatusChange(annotation.id, 'resolved')
+                              startEdit(annotation.id, annotation.comment)
                             }}
-                            className="flex items-center gap-1 px-2 py-1 rounded text-[11px] font-medium bg-blue-50 text-blue-700 hover:bg-blue-100 transition"
-                            title="Confirm resolved"
+                            className="flex items-center gap-1 px-2 py-1 rounded text-[11px] font-medium text-gray-600 hover:bg-gray-100 transition"
+                            title="Edit the comment and send back to Agent (status → open)"
                           >
-                            <CheckCheck size={12} />
-                            Resolve
+                            <Pencil size={12} />
+                            Re-open & Edit
                           </button>
                         )}
-                        {(annotation.status === 'open' || annotation.status === 'done') && (
+                        {annotation.status === 'open' && (
                           <button
                             onClick={(e) => {
                               e.stopPropagation()
@@ -349,6 +381,53 @@ export default function AnnotationPanel({
                           </button>
                         )}
                       </div>
+
+                      {/* Inline editor (Re-open & Edit flow) */}
+                      {editingId === annotation.id && (
+                        <div className="mt-2 flex flex-col gap-2">
+                          <textarea
+                            value={editText}
+                            onChange={(e) => setEditText(e.target.value)}
+                            onClick={(e) => e.stopPropagation()}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Escape') {
+                                e.preventDefault()
+                                cancelEdit()
+                              }
+                              if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+                                e.preventDefault()
+                                submitEdit(annotation.id)
+                              }
+                            }}
+                            placeholder="Update what you want changed…"
+                            autoFocus
+                            className="w-full px-2 py-1.5 border border-border rounded text-xs bg-background focus:outline-none focus:ring-1 focus:ring-accent/50 resize-y min-h-[64px]"
+                          />
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                submitEdit(annotation.id)
+                              }}
+                              disabled={!editText.trim()}
+                              className="flex items-center gap-1 px-2.5 py-1 rounded text-[11px] font-medium bg-accent text-white hover:opacity-90 disabled:opacity-40 transition"
+                              title="⌘+Enter"
+                            >
+                              <RefreshCw size={12} />
+                              Submit & Re-open
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                cancelEdit()
+                              }}
+                              className="px-2 py-1 rounded text-[11px] text-gray-500 hover:bg-gray-100 transition"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        </div>
+                      )}
 
                       {/* Reply input */}
                       {replyingTo === annotation.id && (

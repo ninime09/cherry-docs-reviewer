@@ -259,6 +259,15 @@ export default function ArticlePage() {
     loadAnnotations()
   }
 
+  async function editAndReopen(id: string, comment: string) {
+    await fetch('/api/annotations', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, comment, status: 'open' }),
+    })
+    loadAnnotations()
+  }
+
   // --- Render guards ---
   if (sessionStatus === 'loading') {
     return (
@@ -382,6 +391,7 @@ export default function ArticlePage() {
             onStatusChange={updateStatus}
             onReply={replyToAnnotation}
             onDelete={deleteAnnotation}
+            onEditAndReopen={editAndReopen}
             currentUserId={session?.user?.id}
             hideFileScope
             className="w-96 shrink-0"
