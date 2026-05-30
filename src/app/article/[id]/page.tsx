@@ -145,42 +145,37 @@ export default function ArticlePage() {
 
   // --- Image click → image annotation (MVP: whole image; no region selection yet) ---
   // The article HTML is injected via dangerouslySetInnerHTML, so we can't use
-  // <AnnotableImage>. Instead we walk the rendered DOM after each render and
-  // attach a lightweight click handler to every <img>. AnnotationOverlay needs
-  // data-annotation-image to find the image for positioning the badge.
+  // <AnnotableImage>. Instead of attaching per-<img> handlers (fragile when
+  // the DOM gets re-rendered) we delegate from the content container — one
+  // click listener that finds the target <img>.
+  // Also tag <img>s with data-annotation-image so AnnotationOverlay can
+  // position the badge.
   useEffect(() => {
     const container = contentRef.current
     if (!container || !article) return
 
-    const imgs = Array.from(container.querySelectorAll<HTMLImageElement>('img'))
-
-    function makeHandler(img: HTMLImageElement) {
-      return (e: MouseEvent) => {
-        e.preventDefault()
-        e.stopPropagation()
-        setPendingImageSelection({
-          src: img.src,
-          alt: img.alt || undefined,
-          region: null,
-        })
-      }
+    // Tag images for AnnotationOverlay.
+    for (const img of Array.from(container.querySelectorAll<HTMLImageElement>('img'))) {
+      if (!img.dataset.annotationImage) img.dataset.annotationImage = img.src
+      img.style.cursor = 'pointer'
     }
 
-    const cleanups: Array<() => void> = []
-    for (const img of imgs) {
-      img.style.cursor = 'pointer'
-      if (!img.dataset.annotationImage) img.dataset.annotationImage = img.src
-      const handler = makeHandler(img)
-      img.addEventListener('click', handler)
-      cleanups.push(() => {
-        img.removeEventListener('click', handler)
-        img.style.cursor = ''
+    function handleClick(e: MouseEvent) {
+      const target = e.target as HTMLElement | null
+      if (!target) return
+      const img = target.closest('img') as HTMLImageElement | null
+      if (!img || !container || !container.contains(img)) return
+      e.preventDefault()
+      e.stopPropagation()
+      setPendingImageSelection({
+        src: img.src,
+        alt: img.alt || undefined,
+        region: null,
       })
     }
 
-    return () => {
-      for (const c of cleanups) c()
-    }
+    container.addEventListener('click', handleClick)
+    return () => container.removeEventListener('click', handleClick)
   }, [article])
 
   // --- Annotation CRUD ---
