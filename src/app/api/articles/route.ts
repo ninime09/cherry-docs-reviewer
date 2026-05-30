@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server'
 import { getApiAuthUser } from '@/lib/api-auth'
 import { prisma } from '@/lib/prisma'
 import { sanitizeArticleHtml } from '@/lib/sanitize-article'
+import { notifyArticleCreated } from '@/lib/feishu-webhook'
 
 // Slug-ify Chinese / mixed titles into a URL-safe-ish handle.
 // We don't try to transliterate; we just keep alnums and replace the rest with "-".
@@ -56,8 +57,11 @@ export async function POST(req: NextRequest) {
       digest: true,
       status: true,
       createdAt: true,
+      createdBy: { select: { name: true } },
     },
   })
+
+  notifyArticleCreated(article)
 
   return Response.json(article, { status: 201 })
 }

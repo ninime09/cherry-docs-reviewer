@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server'
 import { getApiAuthUser } from '@/lib/api-auth'
 import { prisma } from '@/lib/prisma'
 import { sanitizeArticleHtml } from '@/lib/sanitize-article'
+import { notifyAgentEdited } from '@/lib/feishu-webhook'
 
 // Resolve either a cuid (`id`) or a slug. Slugs may contain CJK characters,
 // so we can't rely on a charset test — try id first, fall back to slug.
@@ -88,6 +89,23 @@ export async function PATCH(
       updatedAt: true,
     },
   })
+
+  // Treat htmlSnapshot replacement as "Agent finished a round of edits".
+  // Count how many annotations are currently resolved → tell the team to review.
+  // (We could instead require an explicit signal, but right now the only
+  // automated path that ships an htmlSnapshot is the Agent edit loop, and the
+  // signal lines up well in practice.)
+  if (htmlSnapshot !== undefined) {
+    const resolvedCount = await prisma.annotation.count({
+      where: { articleId: article.id, status: 'resolved' },
+    })
+    if (resolvedCount > 0) {
+      notifyAgentEdited({
+        article: { slug: updated.slug, title: updated.title },
+        resolvedCount,
+      })
+    }
+  }
 
   return Response.json(updated)
 }
