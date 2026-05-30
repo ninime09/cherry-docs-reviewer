@@ -97,10 +97,6 @@ function fireAndForget(promise: Promise<unknown>) {
   promise.catch((err) => console.warn('[feishu webhook] background failure:', err))
 }
 
-function truncate(s: string, max = 80): string {
-  return s.length > max ? `${s.slice(0, max - 1)}…` : s
-}
-
 // ----- Public events -----
 
 export function notifyArticleCreated(article: { slug: string; title: string; createdBy?: { name?: string | null } | null }) {
@@ -119,46 +115,6 @@ export function notifyArticleCreated(article: { slug: string; title: string; cre
         body,
         href: publicArticleUrl(article.slug),
         ctaLabel: '去批注',
-      })
-    )
-  )
-}
-
-export function notifyAnnotationCreated(opts: {
-  article: { slug: string; title: string }
-  reviewer: { name?: string | null }
-  selectedText: string | null
-  comment: string
-}) {
-  const who = opts.reviewer.name || '审核人'
-  const quote = opts.selectedText ? `> ${truncate(opts.selectedText, 60)}\n\n` : ''
-  const body = `**${opts.article.title}**\n\n${quote}${who}：${truncate(opts.comment, 120)}`
-  fireAndForget(
-    postWebhook(
-      buildFeishuCard({
-        title: '💬 新批注',
-        body,
-        href: publicArticleUrl(opts.article.slug),
-        ctaLabel: '查看批注',
-      })
-    )
-  )
-}
-
-export function notifyAnnotationReopened(opts: {
-  article: { slug: string; title: string }
-  reviewer: { name?: string | null }
-  comment: string
-}) {
-  const who = opts.reviewer.name || '审核人'
-  const body = `**${opts.article.title}**\n\n${who} 不满意，重新提了要求：\n\n> ${truncate(opts.comment, 120)}\n\n请让 Agent 再改一轮。`
-  fireAndForget(
-    postWebhook(
-      buildFeishuCard({
-        title: '🔄 批注被 Re-open',
-        body,
-        href: publicArticleUrl(opts.article.slug),
-        ctaLabel: '查看新要求',
       })
     )
   )

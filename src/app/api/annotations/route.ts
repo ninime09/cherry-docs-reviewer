@@ -1,7 +1,6 @@
 import { NextRequest } from 'next/server'
 import { getApiAuthUser } from '@/lib/api-auth'
 import { prisma } from '@/lib/prisma'
-import { notifyAnnotationCreated, notifyAnnotationReopened } from '@/lib/feishu-webhook'
 
 // Touch the parent (ReviewSession or Article) so polling clients see "something changed".
 async function touchParent(opts: { sessionId?: string | null; articleId?: string | null }) {
@@ -129,23 +128,6 @@ export async function POST(req: NextRequest) {
 
   await touchParent({ sessionId, articleId })
 
-  // Notify the team about article annotations (PR review session annotations
-  // don't go through Feishu — those have their own GitHub review loop).
-  if (articleId) {
-    const article = await prisma.article.findUnique({
-      where: { id: articleId },
-      select: { slug: true, title: true },
-    })
-    if (article) {
-      notifyAnnotationCreated({
-        article,
-        reviewer: annotation.reviewer,
-        selectedText: annotation.selectedText,
-        comment: annotation.comment,
-      })
-    }
-  }
-
   return Response.json(annotation, { status: 201 })
 }
 
@@ -163,7 +145,7 @@ export async function PATCH(req: NextRequest) {
 
   const existing = await prisma.annotation.findUnique({
     where: { id },
-    select: { sessionId: true, articleId: true, status: true },
+    select: { sessionId: true, articleId: true },
   })
 
   // Add a reply
@@ -188,32 +170,8 @@ export async function PATCH(req: NextRequest) {
   const updated = await prisma.annotation.update({
     where: { id },
     data: updateData,
-    include: { reviewer: { select: { id: true, name: true, image: true } } },
   })
   if (existing) await touchParent(existing)
-
-  // Re-open & Edit: status went from resolved/done/wontfix → open AND comment changed.
-  // That's the signal a human reviewer wasn't satisfied with the Agent fix and is
-  // asking for a re-do — tell the team.
-  const isReopen =
-    existing &&
-    existing.articleId &&
-    existing.status !== 'open' &&
-    status === 'open' &&
-    comment !== undefined
-  if (isReopen) {
-    const article = await prisma.article.findUnique({
-      where: { id: existing.articleId! },
-      select: { slug: true, title: true },
-    })
-    if (article) {
-      notifyAnnotationReopened({
-        article,
-        reviewer: updated.reviewer,
-        comment: updated.comment,
-      })
-    }
-  }
 
   return Response.json(updated)
 }
